@@ -3,6 +3,11 @@ const mongoose = require('mongoose');
 let mongoServer;
 
 const connectDB = async () => {
+    // If connection already open (e.g. serverless warm function), reuse it
+    if (mongoose.connection.readyState >= 1) {
+        return;
+    }
+
     try {
         // Try connecting to Atlas first
         console.log('Attempting to connect to MongoDB Atlas...');

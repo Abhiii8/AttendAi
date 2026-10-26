@@ -32,4 +32,8 @@ const startServer = async () => {
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 };
 
-startServer();
+if (require.main === module || !process.env.VERCEL) {
+    startServer();
+}
+
+module.exports = app;
