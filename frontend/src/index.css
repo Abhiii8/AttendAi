@@ -1,0 +1,169 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #8b5cf6; /* Amethyst Violet */
+  --color-primary-dark: #7c3aed;
+  --color-surface: #18181b; /* Frosted Obsidian */
+  --color-background: #09090b; /* Midnight Onyx */
+}
+
+:root {
+  --primary: #8b5cf6;
+  --background: #09090b;
+  --surface: #18181b;
+  --text-main: #fafafa;
+  --text-muted: #a1a1aa;
+  --border: rgba(255, 255, 255, 0.08);
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: var(--text-main);
+  background-color: var(--background);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-image: none;
+}
+
+/* Glassmorphism Panels */
+.glass-panel {
+  background: var(--surface);
+  border-radius: 24px;
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-panel:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -2px rgba(0, 0, 0, 0.4);
+}
+
+/* Minimal Buttons */
+button {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-weight: 500;
+  border-radius: 12px !important;
+  letter-spacing: 0.01em;
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+/* Primary Button Styling */
+.bg-primary {
+  background-color: var(--primary);
+  color: #ffffff;
+  border: none;
+  box-shadow: 0 4px 14px 0 rgba(139, 92, 246, 0.39);
+}
+
+.bg-primary:hover {
+  background-color: var(--primary-dark);
+  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.23);
+  transform: translateY(-1px);
+}
+
+.bg-primary:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.5);
+}
+
+/* Specific text overrides */
+.text-primary {
+  color: var(--primary) !important;
+}
+
+/* High contrast headings */
+h1, h2, h3, h4, h5, h6 {
+  color: #ffffff !important;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* Inputs and Selects */
+input:not([type="range"]):not([type="checkbox"]):not([type="radio"]), select {
+  background-color: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  color: #ffffff;
+  transition: all 0.2s ease-in-out;
+  font-size: 0.875rem;
+}
+
+option {
+  background-color: var(--surface) !important;
+  color: #ffffff !important;
+}
+
+input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):focus, select:focus {
+  outline: none;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+/* Text utility overrides */
+.text-text-main, .text-gray-900, .text-gray-800 {
+  color: #fafafa !important;
+}
+.text-text-muted, .text-gray-500, .text-gray-600 {
+  color: var(--text-muted) !important;
+}
+
+/* Standard backgrounds overrides */
+.bg-white, .bg-surface {
+  background-color: var(--surface) !important;
+  border-color: var(--border) !important;
+}
+.bg-gray-50 {
+  background-color: #18181b !important;
+  border-color: var(--border) !important;
+}
+.border-gray-100, .border-gray-200, .border-border {
+  border-color: var(--border) !important;
+}
+
+
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Modals */
+.fixed.inset-0 > div {
+  background: var(--surface);
+  border-radius: 24px !important;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+}
+
+/* Pulse/Active Dots */
+.bg-green-500 {
+  background-color: #10b981 !important;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+}
+.text-green-600 {
+  color: #10b981 !important;
+}
+
+@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+  body * { visibility: hidden; }
+  .print\:m-0, .print\:m-0 * { visibility: visible; }
+  .print\:m-0 { position: absolute; left: 0; top: 0; width: 100%; }
+}
