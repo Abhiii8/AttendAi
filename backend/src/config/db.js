@@ -3,9 +3,9 @@ const mongoose = require('mongoose');
 let mongoServer;
 
 const connectDB = async () => {
-    // If connection already open (e.g. serverless warm function), reuse it
-    if (mongoose.connection.readyState >= 1) {
-        return;
+    // If already connected, reuse existing connection
+    if (mongoose.connection.readyState === 1) {
+        return mongoose.connection;
     }
 
     try {
@@ -15,6 +15,7 @@ const connectDB = async () => {
             serverSelectionTimeoutMS: 10000 // 10 second timeout for reliable Atlas connection
         });
         console.log(`MongoDB Connected: ${conn.connection.host}`);
+        return conn;
     } catch (error) {
         console.warn(`Atlas connection failed: ${error.message}`);
         console.log('Falling back to local in-memory MongoDB (mongodb-memory-server)...');
@@ -40,9 +41,10 @@ const connectDB = async () => {
                 });
                 console.log('Default admin seeded: admin@attendai.com / password123');
             }
+            return conn;
         } catch (memError) {
             console.error(`Failed to start in-memory database: ${memError.message}`);
-            process.exit(1);
+            throw memError;
         }
     }
 };

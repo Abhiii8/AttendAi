@@ -9,6 +9,17 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Crucial for Vercel Serverless: ensure DB connection is ready for all requests
+app.use(async (req, res, next) => {
+    try {
+        await connectDB();
+        next();
+    } catch (err) {
+        console.error('DB Connection middleware error:', err);
+        return res.status(500).json({ message: 'Database connection failed', error: err.message });
+    }
+});
+
 // Basic Route
 app.get('/', (req, res) => {
     res.send('AttendAI API is running...');
@@ -24,16 +35,15 @@ app.use('/api/admin', adminRoutes);
 app.use('/api', classRoutes);
 app.use('/api/attendance', attendanceRoutes);
 
-const startServer = async () => {
-    // Connect to Database
-    await connectDB();
+const PORT = process.env.PORT || 5000;
 
-    const PORT = process.env.PORT || 5000;
-    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-};
-
+// Connect and listen if running as a standalone node server
 if (require.main === module || !process.env.VERCEL) {
-    startServer();
+    connectDB().then(() => {
+        app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+    }).catch(err => {
+        console.error('Server failed to start:', err);
+    });
 }
 
 module.exports = app;
