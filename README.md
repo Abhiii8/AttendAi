@@ -239,31 +239,63 @@ pie title AttendAI Verification Factors
 
 ```text
 Attendai/
-├── backend/                  # Express REST API Server
-│   ├── src/
-│   │   ├── config/           # MongoDB Atlas & in-memory fallback config
-│   │   ├── controllers/      # Auth, Admin, Class, and Attendance controllers
-│   │   ├── middleware/       # JWT auth & RBAC route protection
-│   │   ├── models/           # Mongoose schemas (User, Class, Attendance, etc.)
-│   │   └── routes/           # RESTful API route definitions
-│   ├── .env.example          # Environment variables template
-│   ├── seed.js               # Admin account seed script
-│   └── server.js             # Server entry point
-├── frontend/                 # React + Vite Single Page Application
-│   ├── public/               # Static assets & face-api.js neural weights
-│   ├── src/
-│   │   ├── assets/           # Project imagery & icons
-│   │   ├── components/       # Reusable components & Glassmorphic Layout
-│   │   ├── pages/            # Role-specific dashboard views & scanner
-│   │   ├── services/         # Axios API communication wrappers
-│   │   └── index.css         # Modern styling & animation keyframes
-│   └── vite.config.js        # Vite build & network host configuration
-├── docs/                     # Architectural documentation, UML diagrams & media
-│   └── assets/               # High-resolution screenshots & UI mockups
-├── .gitignore                # Production ignore rules (securing .env & node_modules)
-├── run.bat                   # 1-Click concurrent runner for Windows
-├── CONTRIBUTING.md           # Open-source contribution guidelines
-└── README.md                 # Project documentation
+├── 📁 backend/
+│   ├── 📁 src/
+│   │   ├── 📁 config/
+│   │   │   └── 📄 [db.js](https://github.com/Abhiii8/AttendAi/blob/main/backend/src/config/db.js)                  (Database connection & in-memory fallback)
+│   │   ├── 📁 controllers/
+│   │   │   ├── 📄 [adminController.js](https://github.com/Abhiii8/AttendAi/blob/main/backend/src/controllers/adminController.js)      (User & Department CRUD management)
+│   │   │   ├── 📄 [attendanceController.js](https://github.com/Abhiii8/AttendAi/blob/main/backend/src/controllers/attendanceController.js) (Biometric match & geofence validation)
+│   │   │   ├── 📄 [authController.js](https://github.com/Abhiii8/AttendAi/blob/main/backend/src/controllers/authController.js)            (JWT login & authentication)
+│   │   │   └── 📄 [classController.js](https://github.com/Abhiii8/AttendAi/blob/main/backend/src/controllers/classController.js)          (Class, schedule & student assignment)
+│   │   ├── 📁 middleware/
+│   │   │   └── 📄 [authMiddleware.js](https://github.com/Abhiii8/AttendAi/blob/main/backend/src/middleware/authMiddleware.js)            (JWT verification & role-based protect)
+│   │   ├── 📁 models/
+│   │   │   ├── 📄 [User.js](https://github.com/Abhiii8/AttendAi/blob/main/backend/src/models/User.js)                        (Schema for Admin, Faculty, and Students)
+│   │   │   ├── 📄 [Attendance.js](https://github.com/Abhiii8/AttendAi/blob/main/backend/src/models/Attendance.js)            (Session token, coordinates & present records)
+│   │   │   ├── 📄 [Class.js](https://github.com/Abhiii8/AttendAi/blob/main/backend/src/models/Class.js)                      (Class schedule, enrolled students & faculty)
+│   │   │   ├── 📄 [Subject.js](https://github.com/Abhiii8/AttendAi/blob/main/backend/src/models/Subject.js)                  (Course subjects & department linkage)
+│   │   │   └── 📄 [Department.js](https://github.com/Abhiii8/AttendAi/blob/main/backend/src/models/Department.js)            (Academic departments)
+│   │   └── 📁 routes/
+│   │       ├── 📄 [adminRoutes.js](https://github.com/Abhiii8/AttendAi/blob/main/backend/src/routes/adminRoutes.js)
+│   │       ├── 📄 [attendanceRoutes.js](https://github.com/Abhiii8/AttendAi/blob/main/backend/src/routes/attendanceRoutes.js)
+│   │       ├── 📄 [authRoutes.js](https://github.com/Abhiii8/AttendAi/blob/main/backend/src/routes/authRoutes.js)
+│   │       └── 📄 [classRoutes.js](https://github.com/Abhiii8/AttendAi/blob/main/backend/src/routes/classRoutes.js)
+│   ├── 📄 [seed.js](https://github.com/Abhiii8/AttendAi/blob/main/backend/seed.js)                                      (Default Admin seeding script)
+│   ├── 📄 [server.js](https://github.com/Abhiii8/AttendAi/blob/main/backend/server.js)                                  (Express API entry point)
+│   ├── 📄 [.env.example](https://github.com/Abhiii8/AttendAi/blob/main/backend/.env.example)                          (Config template)
+│   └── 📄 [package.json](https://github.com/Abhiii8/AttendAi/blob/main/backend/package.json)
+├── 📁 frontend/
+│   ├── 📁 src/
+│   │   ├── 📁 components/
+│   │   │   └── 📄 [Layout.jsx](https://github.com/Abhiii8/AttendAi/blob/main/frontend/src/components/Layout.jsx)              (Glassmorphic navigation & sidebar)
+│   │   ├── 📁 pages/
+│   │   │   ├── 📄 [Dashboard.jsx](https://github.com/Abhiii8/AttendAi/blob/main/frontend/src/pages/Dashboard.jsx)            (Role-based main dashboard)
+│   │   │   ├── 📄 [ScanQR.jsx](https://github.com/Abhiii8/AttendAi/blob/main/frontend/src/pages/ScanQR.jsx)                  (Student camera scanner & face recognition)
+│   │   │   ├── 📄 [GenerateQR.jsx](https://github.com/Abhiii8/AttendAi/blob/main/frontend/src/pages/GenerateQR.jsx)          (Faculty session broadcaster)
+│   │   │   ├── 📄 [Timetable.jsx](https://github.com/Abhiii8/AttendAi/blob/main/frontend/src/pages/Timetable.jsx)            (Interactive visual grid & print export)
+│   │   │   ├── 📄 [FacultyClasses.jsx](https://github.com/Abhiii8/AttendAi/blob/main/frontend/src/pages/FacultyClasses.jsx)
+│   │   │   ├── 📄 [FacultyStudents.jsx](https://github.com/Abhiii8/AttendAi/blob/main/frontend/src/pages/FacultyStudents.jsx)(Student passport photo enrollment)
+│   │   │   ├── 📄 [AdminClasses.jsx](https://github.com/Abhiii8/AttendAi/blob/main/frontend/src/pages/AdminClasses.jsx)
+│   │   │   ├── 📄 [Departments.jsx](https://github.com/Abhiii8/AttendAi/blob/main/frontend/src/pages/Departments.jsx)
+│   │   │   ├── 📄 [Subjects.jsx](https://github.com/Abhiii8/AttendAi/blob/main/frontend/src/pages/Subjects.jsx)
+│   │   │   ├── 📄 [Users.jsx](https://github.com/Abhiii8/AttendAi/blob/main/frontend/src/pages/Users.jsx)
+│   │   │   ├── 📄 [Records.jsx](https://github.com/Abhiii8/AttendAi/blob/main/frontend/src/pages/Records.jsx)                (Past session logs & CSV export)
+│   │   │   ├── 📄 [History.jsx](https://github.com/Abhiii8/AttendAi/blob/main/frontend/src/pages/History.jsx)                (Student attendance timeline)
+│   │   │   ├── 📄 [Login.jsx](https://github.com/Abhiii8/AttendAi/blob/main/frontend/src/pages/Login.jsx)
+│   │   │   └── 📄 [Register.jsx](https://github.com/Abhiii8/AttendAi/blob/main/frontend/src/pages/Register.jsx)
+│   │   ├── 📁 services/
+│   │   │   ├── 📄 [auth.service.js](https://github.com/Abhiii8/AttendAi/blob/main/frontend/src/services/auth.service.js)
+│   │   │   ├── 📄 [attendance.service.js](https://github.com/Abhiii8/AttendAi/blob/main/frontend/src/services/attendance.service.js)
+│   │   │   └── 📄 [admin.service.js](https://github.com/Abhiii8/AttendAi/blob/main/frontend/src/services/admin.service.js)
+│   │   ├── 📄 [App.jsx](https://github.com/Abhiii8/AttendAi/blob/main/frontend/src/App.jsx)
+│   │   └── 📄 [main.jsx](https://github.com/Abhiii8/AttendAi/blob/main/frontend/src/main.jsx)
+│   ├── 📄 [vite.config.js](https://github.com/Abhiii8/AttendAi/blob/main/frontend/vite.config.js)
+│   └── 📄 [package.json](https://github.com/Abhiii8/AttendAi/blob/main/frontend/package.json)
+└── 📁 docs/
+    ├── 📄 [data_dictionary.md](https://github.com/Abhiii8/AttendAi/blob/main/docs/data_dictionary.md)                      (Full Database Schema specifications)
+    ├── 📄 [project_progress.md](https://github.com/Abhiii8/AttendAi/blob/main/docs/project_progress.md)                    (System architecture & progress logs)
+    └── 📄 [uml_diagrams.md](https://github.com/Abhiii8/AttendAi/blob/main/docs/uml_diagrams.md)                          (ER & Sequence diagrams)
 ```
 
 ---
