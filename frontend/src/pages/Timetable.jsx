@@ -127,7 +127,7 @@ export default function Timetable() {
     setSessionModalState(prev => ({ ...prev, isProcessing: true, error: null }));
     try {
       const code = Math.floor(1000 + Math.random() * 9000).toString();
-      const position = await getHighAccuracyCoordinates(4000);
+      const position = await getHighAccuracyCoordinates(5000);
       const payload = {
         attendanceCode: code,
         lat: position.coords.latitude,

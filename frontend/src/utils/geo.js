@@ -1,78 +1,129 @@
 /**
- * High-Accuracy GPS Geolocation Utility
- * Samples multiple GPS readings to lock onto true satellite fixes
- * rather than coarse cached Wi-Fi or cellular IP estimates.
+ * Resilient High-Accuracy GPS Geolocation Utility
+ * 
+ * Strategy:
+ * 1. Attempt high-accuracy GPS with watchPosition (seeking <= 20m satellite fix).
+ * 2. If <= 20m is reached, resolve immediately.
+ * 3. Cache the best reading seen so far.
+ * 4. If high-accuracy takes too long (e.g. indoors, concrete walls, battery-saver mode),
+ *    smoothly fall back to standard network/Wi-Fi positioning (enableHighAccuracy: false).
+ * 5. Handle permission-denied vs timeout errors with user-friendly messages.
  */
-export const getHighAccuracyCoordinates = (maxWaitMs = 3500) => {
+export const getHighAccuracyCoordinates = (preferredWaitMs = 5000) => {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
-      return reject(new Error("GPS Geolocation is not supported by your browser."));
+      return reject(new Error("Geolocation is not supported by your browser."));
     }
 
     let bestPosition = null;
     let watchId = null;
-    let timeoutId = null;
+    let fallbackTimer = null;
+    let isResolved = false;
 
     const cleanup = () => {
       if (watchId !== null) {
-        navigator.geolocation.clearWatch(watchId);
+        try {
+          navigator.geolocation.clearWatch(watchId);
+        } catch (e) {
+          // ignore
+        }
         watchId = null;
       }
-      if (timeoutId !== null) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
+      if (fallbackTimer !== null) {
+        clearTimeout(fallbackTimer);
+        fallbackTimer = null;
       }
     };
 
-    timeoutId = setTimeout(() => {
+    const finishSuccess = (pos) => {
+      if (isResolved) return;
+      isResolved = true;
       cleanup();
-      if (bestPosition) {
-        resolve(bestPosition);
-      } else {
-        // Fallback to single-shot request
-        navigator.geolocation.getCurrentPosition(
-          (pos) => resolve(pos),
-          (err) => reject(new Error("Unable to obtain GPS fix: " + err.message)),
-          {
-            enableHighAccuracy: true,
-            timeout: 6000,
-            maximumAge: 0
-          }
-        );
+      resolve(pos);
+    };
+
+    const finishError = (err) => {
+      if (isResolved) return;
+      isResolved = true;
+      cleanup();
+      
+      let msg = "Unable to retrieve device location.";
+      if (err) {
+        if (err.code === 1) { // PERMISSION_DENIED
+          msg = "Location permission denied. Please allow location access in your browser settings.";
+        } else if (err.code === 2) { // POSITION_UNAVAILABLE
+          msg = "Location unavailable. Please make sure Location/GPS is turned ON on your phone.";
+        } else if (err.code === 3) { // TIMEOUT
+          msg = "Location request timed out. Please ensure GPS/Location is enabled and try again.";
+        } else if (err.message) {
+          msg = err.message;
+        }
       }
-    }, maxWaitMs);
+      reject(new Error(msg));
+    };
+
+    // Fallback runner: If satellite GPS is taking too long or times out
+    const runStandardFallback = () => {
+      if (bestPosition) {
+        return finishSuccess(bestPosition);
+      }
+
+      // Try standard accuracy (cellular / Wi-Fi triangulation) with generous cache
+      navigator.geolocation.getCurrentPosition(
+        (pos) => finishSuccess(pos),
+        (fallbackErr) => {
+          if (bestPosition) {
+            finishSuccess(bestPosition);
+          } else {
+            finishError(fallbackErr);
+          }
+        },
+        {
+          enableHighAccuracy: false,
+          timeout: 8000,
+          maximumAge: 60000 // Accept up to 1-minute cached fix
+        }
+      );
+    };
+
+    // Set safety timer: after preferredWaitMs, fallback to standard accuracy
+    fallbackTimer = setTimeout(() => {
+      if (bestPosition) {
+        finishSuccess(bestPosition);
+      } else {
+        runStandardFallback();
+      }
+    }, preferredWaitMs);
 
     try {
+      // Step 1: Start watchPosition with high accuracy
       watchId = navigator.geolocation.watchPosition(
         (pos) => {
-          // Keep reading with the lowest accuracy radius (highest precision)
           if (!bestPosition || pos.coords.accuracy < bestPosition.coords.accuracy) {
             bestPosition = pos;
           }
 
-          // If accuracy is within 15 meters, that's high-grade GPS satellite lock!
-          if (pos.coords.accuracy <= 15) {
-            cleanup();
-            resolve(pos);
+          // Ideal satellite fix (accuracy <= 20 meters)
+          if (pos.coords.accuracy <= 20) {
+            finishSuccess(pos);
           }
         },
-        (err) => {
-          // Don't fail immediately, wait for better readings or fallback
-          console.warn("GPS reading glitch:", err.message);
+        (watchErr) => {
+          // If permission was explicitly denied, fail immediately without waiting
+          if (watchErr.code === 1) {
+            finishError(watchErr);
+          } else {
+            console.warn("GPS watch glitch:", watchErr.message);
+          }
         },
         {
           enableHighAccuracy: true,
-          timeout: maxWaitMs,
-          maximumAge: 0
+          timeout: preferredWaitMs + 3000,
+          maximumAge: 15000 // Accept up to 15-second old fix to avoid cold-start freeze
         }
       );
-    } catch (e) {
-      cleanup();
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true,
-        timeout: 5000,
-        maximumAge: 0
-      });
+    } catch (err) {
+      runStandardFallback();
     }
   });
 };

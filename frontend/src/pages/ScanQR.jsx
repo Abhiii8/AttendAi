@@ -126,20 +126,6 @@ export default function ScanQR() {
     }
   };
 
-  const getCoordinates = () => {
-    return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(new Error("Geolocation is not supported by your browser."));
-      } else {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0
-        });
-      }
-    });
-  };
-
   const handleVerify = useCallback(async () => {
     if (!attendanceCode) {
       setErrorMsg("Please enter the secret code from the board.");
@@ -151,9 +137,7 @@ export default function ScanQR() {
     setErrorMsg('');
 
     try {
-      const position = await getHighAccuracyCoordinates(4000).catch(err => {
-        throw new Error("High-precision GPS access required for Geofencing verification. " + err.message);
-      });
+      const position = await getHighAccuracyCoordinates(5000);
       const lat = position.coords.latitude;
       const lng = position.coords.longitude;
       const accuracy = position.coords.accuracy;

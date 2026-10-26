@@ -65,7 +65,7 @@ export default function GenerateQR() {
 
     try {
       // Use multi-sample high-accuracy GPS lock
-      const position = await getHighAccuracyCoordinates(4000);
+      const position = await getHighAccuracyCoordinates(5000);
       const lat = position.coords.latitude;
       const lng = position.coords.longitude;
       const acc = position.coords.accuracy ? Math.round(position.coords.accuracy * 10) / 10 : null;
