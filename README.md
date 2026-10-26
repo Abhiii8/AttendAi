@@ -121,34 +121,34 @@ The following state machine diagram illustrates the strict validation sequence a
 ```mermaid
 stateDiagram-v2
     [*] --> Standby
-    Standby --> SessionStarted : Faculty activates lecture session
-    SessionStarted --> GPSValidation : Student opens scanner & grants location
+    Standby --> SessionStarted : Faculty activates session
+    SessionStarted --> GPSValidation : Student requests check-in
     
     state GPSValidation {
         [*] --> CheckRadius
-        CheckRadius --> InRange : Distance <= 100m from classroom
-        CheckRadius --> OutOfBounds : Distance > 100m (Proxy attempt)
+        CheckRadius --> InRange : Within 100m radius
+        CheckRadius --> OutOfBounds : Exceeds 100m radius
     }
 
-    OutOfBounds --> Rejected : "Error: Outside classroom bounds"
+    OutOfBounds --> Rejected : Outside classroom bounds
     
-    InRange --> FacialBiometrics : Open camera & detect face mesh
+    InRange --> FacialBiometrics : Face mesh detected
     
     state FacialBiometrics {
         [*] --> DetectLandmarks
-        DetectLandmarks --> Extract128D : 68 facial points detected
-        Extract128D --> CompareEuclidean : Compare with DB reference vector
-        CompareEuclidean --> Match : Distance < 0.6
-        CompareEuclidean --> Mismatch : Distance >= 0.6
+        DetectLandmarks --> Extract128D : 68 points mapped
+        Extract128D --> CompareEuclidean : Compare reference vector
+        CompareEuclidean --> Match : Euclidean distance under 0.6
+        CompareEuclidean --> Mismatch : Euclidean distance 0.6 or above
     }
     
-    Mismatch --> Rejected : "Error: Biometric mismatch"
-    Match --> PinCheck : Validate 4-digit board PIN
+    Mismatch --> Rejected : Biometric mismatch detected
+    Match --> PinCheck : Validate 4-digit PIN
     
-    PinCheck --> Verified : PIN match verified
-    PinCheck --> Rejected : PIN invalid / expired
+    PinCheck --> Verified : PIN verified
+    PinCheck --> Rejected : PIN invalid or expired
     
-    Verified --> [*] : Attendance recorded in MongoDB
+    Verified --> [*] : Attendance recorded
     Rejected --> [*] : Security alert logged
 ```
 
@@ -160,20 +160,20 @@ This timeline tracks how a typical 15-minute lecture check-in window functions f
 
 ```mermaid
 gantt
-    title Lecture Attendance Session Lifecycle
-    dateFormat  m
-    axisFormat %M min
+    title Lecture Attendance Session Lifecycle (09:00 - 09:15 AM)
+    dateFormat HH:mm
+    axisFormat %H:%M
 
     section Faculty Workflow
-    Open Timetable & Select Class    :done, 0, 1m
-    GPS Lock & Session Broadcast      :done, 1m, 2m
-    Whiteboard PIN Active             :active, 2m, 12m
-    Auto-Close Session & CSV Export   :crit, 12m, 15m
+    Open Timetable & Select Class    :done, 09:00, 09:01
+    GPS Lock & Session Broadcast      :done, 09:01, 09:02
+    Whiteboard PIN Active             :active, 09:02, 09:12
+    Auto-Close Session & CSV Export   :crit, 09:12, 09:15
 
     section Student Workflow
-    Classroom Arrival                 :done, 0, 3m
-    Scan & Biometric Authentication   :active, 3m, 7m
-    Instant Confirmation Notification :milestone, 7m, 8m
+    Classroom Arrival                 :done, 09:00, 09:03
+    Scan & Biometric Authentication   :active, 09:03, 09:07
+    Instant Confirmation Notification :milestone, 09:07, 09:08
 ```
 
 ---
@@ -183,11 +183,11 @@ gantt
 Why AttendAI is virtually impossible to fool:
 
 ```mermaid
-pie title AttendAI Verification Weighting
-    "Facial Recognition Match (Euclidean < 0.6)" : 45
-    "GPS Geofence Validation (Haversine <= 100m)" : 30
-    "Single-Use Cryptographic Session Token" : 15
-    "Rotating Whiteboard PIN Code" : 10
+pie title AttendAI Verification Factors
+    "Facial Recognition Match" : 45
+    "GPS Geofence Validation" : 30
+    "Cryptographic Session Token" : 15
+    "Rotating Whiteboard PIN" : 10
 ```
 
 ---
@@ -356,12 +356,12 @@ gitGraph
     branch develop
     checkout develop
     commit id: "init-dev"
-    branch feature/liveness-detection
-    checkout feature/liveness-detection
-    commit id: "add-blink-detector"
+    branch feature-liveness
+    checkout feature-liveness
+    commit id: "add-blink-check"
     commit id: "test-camera"
     checkout develop
-    merge feature/liveness-detection id: "merge-pr"
+    merge feature-liveness id: "merge-pr"
     checkout main
     merge develop id: "v1.1.0-release" tag: "v1.1.0"
 ```
