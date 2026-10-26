@@ -12,12 +12,18 @@
 [![face-api.js](https://img.shields.io/badge/Biometrics-face--api.js-FF6F00?style=for-the-badge&logo=tensorflow&logoColor=white)](https://justadudewhohacks.github.io/face-api.js/docs/index.html)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=for-the-badge)](CONTRIBUTING.md)
 
+<br />
+
+<img src="docs/assets/banner.png" alt="AttendAI Platform Preview" width="100%" style="border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.5);" />
+
+<br /><br />
+
 <p align="center">
   <b>AttendAI</b> is an enterprise-grade academic platform built to completely eradicate proxy attendance (buddy punching). <br />
-  Powered by client-side deep neural networks, GPS geofencing, and rotating cryptographic tokens.
+  Powered by in-browser deep neural networks, GPS geofencing, and rotating cryptographic tokens.
 </p>
 
-[Explore Documentation](#-system-architecture) • [Getting Started](#-installation--setup) • [Contributing Guide](#-contributing-guidelines) • [Report Bug](https://github.com/Abhiii8/AttendAi/issues)
+[Explore Docs](#-system-architecture) • [Verification Flow](#-student-verification-lifecycle) • [Session Timeline](#-live-session-lifecycle) • [Setup Guide](#-installation--setup) • [Contribute](#-contributing-guidelines) • [Report Bug](https://github.com/Abhiii8/AttendAi/issues)
 
 </div>
 
@@ -28,12 +34,14 @@
 - [Vision & Problem Statement](#-vision--problem-statement)
 - [Key Features Matrix](#-key-features-matrix)
 - [System Architecture](#-system-architecture)
-- [Multi-Factor Verification Flow](#-multi-factor-verification-flow)
+- [Student Verification Lifecycle (State Graph)](#-student-verification-lifecycle)
+- [Live Session Lifecycle (Gantt Chart)](#-live-session-lifecycle)
+- [Multi-Factor Security Breakdown (Chart)](#-multi-factor-security-breakdown)
 - [Role-Based Portals](#-role-based-portals)
 - [Repository Structure](#-repository-structure)
 - [Installation & Setup](#-installation--setup)
-- [API Reference](#-api-reference)
-- [Contributing Guidelines](#-contributing-guidelines)
+- [Mobile Device Testing](#-mobile-device-testing)
+- [Contributing Guidelines & Git Workflow](#-contributing-guidelines)
 - [Roadmap](#-roadmap)
 - [License & Authors](#-license--authors)
 
@@ -42,7 +50,7 @@
 ## 💡 Vision & Problem Statement
 
 Traditional university roll calls and static RFID badge scans suffer from three major vulnerabilities:
-1. **Buddy Punching / Proxy Attendance:** Students hand badges to friends or share static QR code screenshots remotely.
+1. **Buddy Punching / Proxy Attendance:** Students hand badges to friends or share static QR code screenshots from their dorm rooms.
 2. **Administrative Time Loss:** Lecturers waste 10–15 minutes per lecture manually calling names.
 3. **Data Fragmentation:** Paper logs or isolated spreadsheets make institutional analytics difficult.
 
@@ -71,11 +79,11 @@ Traditional university roll calls and static RFID badge scans suffer from three 
 
 ## 🏗 System Architecture
 
-The application adopts a decoupled client-server architecture utilizing **MERN** (MongoDB, Express, React, Node.js).
+The application adopts a decoupled client-server architecture utilizing the **MERN** stack (MongoDB, Express, React, Node.js).
 
 ```mermaid
 flowchart TD
-    subgraph Client [Frontend Layer - React + Vite]
+    subgraph Client [Frontend Layer - React 18 + Vite]
         UI1[Faculty Portal]
         UI2[Student Portal]
         UI3[Admin Management Console]
@@ -90,7 +98,7 @@ flowchart TD
         FAC_ALG[Euclidean Distance Evaluator]
     end
 
-    subgraph Data [Persistence Layer - MongoDB Atlas]
+    subgraph Data [Persistence Layer - MongoDB Atlas Cloud]
         U_COLL[(Users & Face Embeddings)]
         C_COLL[(Classes & Timetables)]
         A_COLL[(Attendance Sessions & Records)]
@@ -106,41 +114,80 @@ flowchart TD
 
 ---
 
-## 🔄 Multi-Factor Verification Flow
+## 🔄 Student Verification Lifecycle
+
+The following state machine diagram illustrates the strict validation sequence a student undergoes when marking attendance:
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    actor Faculty
-    actor Student
-    participant Frontend as Student Device
-    participant API as Backend Server
-    participant DB as MongoDB Atlas
-
-    Faculty->>API: POST /api/attendance/start (Class ID, GPS Lat/Lng)
-    API->>DB: Store session with sessionToken & 4-digit PIN
-    API-->>Faculty: Return Session active (Display PIN on classroom board)
-
-    Student->>Frontend: Open "Mark Attendance"
-    Frontend->>Frontend: Capture Webcam Selfie & extract 128D Face Embedding
-    Frontend->>Frontend: Request Current GPS Coordinates
-    Student->>Frontend: Enter 4-digit PIN shown on classroom board
-
-    Frontend->>API: POST /api/attendance/mark (token, pin, coords, embedding)
+stateDiagram-v2
+    [*] --> Standby
+    Standby --> SessionStarted : Faculty activates lecture session
+    SessionStarted --> GPSValidation : Student opens scanner & grants location
     
-    API->>DB: Retrieve session & student's registered face embedding
-    API->>API: Validate PIN & Session Token
-    API->>API: Calculate Geofence (Haversine formula <= 100m)
-    API->>API: Calculate Biometric Match (Euclidean distance < 0.6)
+    state GPSValidation {
+        [*] --> CheckRadius
+        CheckRadius --> InRange : Distance <= 100m from classroom
+        CheckRadius --> OutOfBounds : Distance > 100m (Proxy attempt)
+    }
 
-    alt All Verifications Pass
-        API->>DB: Update record status = "Present"
-        API-->>Frontend: 200 OK (Attendance Recorded)
-        Frontend-->>Student: Display Green Success Animation
-    else Distance > 100m OR Face Mismatch
-        API-->>Frontend: 400 Bad Request (Proxy / Spoofing Detected)
-        Frontend-->>Student: Display Warning & Deny Entry
-    end
+    OutOfBounds --> Rejected : "Error: Outside classroom bounds"
+    
+    InRange --> FacialBiometrics : Open camera & detect face mesh
+    
+    state FacialBiometrics {
+        [*] --> DetectLandmarks
+        DetectLandmarks --> Extract128D : 68 facial points detected
+        Extract128D --> CompareEuclidean : Compare with DB reference vector
+        CompareEuclidean --> Match : Distance < 0.6
+        CompareEuclidean --> Mismatch : Distance >= 0.6
+    }
+    
+    Mismatch --> Rejected : "Error: Biometric mismatch"
+    Match --> PinCheck : Validate 4-digit board PIN
+    
+    PinCheck --> Verified : PIN match verified
+    PinCheck --> Rejected : PIN invalid / expired
+    
+    Verified --> [*] : Attendance recorded in MongoDB
+    Rejected --> [*] : Security alert logged
+```
+
+---
+
+## ⏱️ Live Session Lifecycle
+
+This timeline tracks how a typical 15-minute lecture check-in window functions for faculty and students:
+
+```mermaid
+gantt
+    title Lecture Attendance Session Lifecycle
+    dateFormat  m
+    axisFormat %M min
+
+    section Faculty Workflow
+    Open Timetable & Select Class    :done, 0, 1m
+    GPS Lock & Session Broadcast      :done, 1m, 2m
+    Whiteboard PIN Active             :active, 2m, 12m
+    Auto-Close Session & CSV Export   :crit, 12m, 15m
+
+    section Student Workflow
+    Classroom Arrival                 :done, 0, 3m
+    Scan & Biometric Authentication   :active, 3m, 7m
+    Instant Confirmation Notification :milestone, 7m, 8m
+```
+
+---
+
+## 🛡️ Multi-Factor Security Breakdown
+
+Why AttendAI is virtually impossible to fool:
+
+```mermaid
+pie title AttendAI Verification Weighting
+    "Facial Recognition Match (Euclidean < 0.6)" : 45
+    "GPS Geofence Validation (Haversine <= 100m)" : 30
+    "Single-Use Cryptographic Session Token" : 15
+    "Rotating Whiteboard PIN Code" : 10
 ```
 
 ---
@@ -163,7 +210,7 @@ sequenceDiagram
 * **1-Click Live Session:** Start a lecture session with automatic GPS geofencing radius locking.
 * **Class Management:** Manage enrolled students and upload reference passport photos for facial recognition.
 * **Session Analytics & Export:** View session-by-session student presence and download comprehensive CSV spreadsheets.
-* **PDF Timetable Export:** Formatted high-definition print stylesheets for physical notice boards.
+* **PDF Timetable Export:** Formatted high-definition print stylesheets for physical notice boards (<kbd>Ctrl</kbd> + <kbd>P</kbd>).
 </details>
 
 <details>
@@ -211,9 +258,11 @@ Attendai/
 │   │   ├── services/         # Axios API communication wrappers
 │   │   └── index.css         # Modern styling & animation keyframes
 │   └── vite.config.js        # Vite build & network host configuration
-├── docs/                     # Architectural documentation & UML specifications
+├── docs/                     # Architectural documentation, UML diagrams & media
+│   └── assets/               # High-resolution screenshots & UI mockups
 ├── .gitignore                # Production ignore rules (securing .env & node_modules)
 ├── run.bat                   # 1-Click concurrent runner for Windows
+├── CONTRIBUTING.md           # Open-source contribution guidelines
 └── README.md                 # Project documentation
 ```
 
@@ -285,7 +334,7 @@ Open **`http://localhost:5173`** in your browser.
 
 ---
 
-## 🌐 Mobile Testing (Camera & GPS)
+## 📱 Mobile Device Testing
 
 Because laptop webcams are often stationary, testing student attendance works best on a mobile device:
 
@@ -297,46 +346,47 @@ Because laptop webcams are often stationary, testing student attendance works be
 
 ## 🤝 Contributing Guidelines
 
-We welcome contributions from the open-source community! Whether you want to fix a bug, add a new feature, or improve documentation, follow these steps:
+We welcome contributions from the open-source community! Follow these steps to build features or fix bugs:
 
-### 1. Fork & Clone
-1. Fork the project on GitHub: Click the **Fork** button at the top right of this page.
-2. Clone your fork locally:
+### Git Branching Workflow
+
+```mermaid
+gitGraph
+    commit id: "v1.0.0"
+    branch develop
+    checkout develop
+    commit id: "init-dev"
+    branch feature/liveness-detection
+    checkout feature/liveness-detection
+    commit id: "add-blink-detector"
+    commit id: "test-camera"
+    checkout develop
+    merge feature/liveness-detection id: "merge-pr"
+    checkout main
+    merge develop id: "v1.1.0-release" tag: "v1.1.0"
+```
+
+### Step-by-Step Contribution:
+1. **Fork the repo** to your personal GitHub account.
+2. **Clone your fork**:
    ```bash
    git clone https://github.com/<your-username>/AttendAi.git
    cd AttendAi
    ```
+3. **Create a descriptive feature branch**:
+   ```bash
+   git checkout -b feature/blink-liveness-check
+   ```
+4. **Commit using Conventional Commits**:
+   ```bash
+   git commit -m "feat(biometrics): integrate blink challenge detection"
+   ```
+5. **Push to your fork and submit a PR**:
+   ```bash
+   git push origin feature/blink-liveness-check
+   ```
 
-### 2. Create a Feature Branch
-Use descriptive branch names following standard conventions:
-```bash
-# For a new feature:
-git checkout -b feature/dark-mode-toggle
-
-# For a bug fix:
-git checkout -b fix/camera-aspect-ratio
-```
-
-### 3. Commit Convention
-Please adhere to the [Conventional Commits](https://www.conventionalcommits.org/) specification:
-* `feat:` A new feature for the user
-* `fix:` A bug fix
-* `docs:` Documentation updates
-* `refactor:` Code changes that neither fix a bug nor add a feature
-* `perf:` Code changes that improve performance
-
-Example:
-```bash
-git commit -m "feat(biometrics): add liveness detection blink counter"
-```
-
-### 4. Push & Open Pull Request
-```bash
-git push origin feature/dark-mode-toggle
-```
-1. Navigate to the original repository on GitHub.
-2. Click **Compare & pull request**.
-3. Provide a clear description of the problem solved, screenshots of UI changes, and testing steps.
+*Check out our full [CONTRIBUTING.md](CONTRIBUTING.md) for code styling guidelines, testing rules, and PR checklist.*
 
 ---
 
@@ -355,7 +405,7 @@ git push origin feature/dark-mode-toggle
 
 ## 📜 License & Authors
 
-Distributed under the **MIT License**. See `LICENSE` for more information.
+Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for more information.
 
 * **Lead Maintainer:** [Abhi Patel](https://github.com/Abhiii8)
 * **Organization:** AttendAI Open Source Initiative
