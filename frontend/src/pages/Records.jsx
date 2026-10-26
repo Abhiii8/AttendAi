@@ -25,10 +25,11 @@ export default function Records() {
   };
 
   const exportCSV = (session) => {
-    const headers = ['Student Name', 'ID Number', 'Status', 'Marked At'];
+    const headers = ['Student Name', 'ID Number', 'Status', 'Distance from Teacher (m)', 'Marked At'];
     const rows = session.records.map(record => {
       const date = record.markedAt ? new Date(record.markedAt).toLocaleString() : '-';
-      return `"${record.student?.name || 'Unknown'}","${record.student?.idNumber || 'Unknown'}","${record.status}","${date}"`;
+      const distance = record.distance !== undefined && record.distance !== null ? `${record.distance} m` : 'N/A';
+      return `"${record.student?.name || 'Unknown'}","${record.student?.idNumber || 'Unknown'}","${record.status}","${distance}","${date}"`;
     });
     
     const csvContent = [headers.join(','), ...rows].join('\n');
@@ -153,7 +154,14 @@ export default function Records() {
                               </div>
                               <div>
                                 <div className="font-bold text-sm text-white">{record.student?.name || 'Unknown'}</div>
-                                <div className="text-[11px] font-mono text-text-muted opacity-80 mt-0.5">{record.student?.idNumber || 'No ID'}</div>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-[11px] font-mono text-text-muted opacity-80">{record.student?.idNumber || 'No ID'}</span>
+                                  {record.distance !== undefined && record.distance !== null && (
+                                    <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                      📍 {record.distance}m
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                             <span className={`px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-full border ${

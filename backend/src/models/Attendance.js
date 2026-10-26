@@ -49,6 +49,23 @@ const attendanceSchema = new mongoose.Schema({
             enum: ['Present', 'Absent', 'Late', 'Excused'],
             default: 'Absent'
         },
+        // Distance in meters between student and instructor at check-in
+        distance: {
+            type: Number
+        },
+        // Device GPS accuracy radius reported by student device
+        accuracy: {
+            type: Number
+        },
+        // Biometric Euclidean distance from face-api.js (threshold < 0.6)
+        faceDistance: {
+            type: Number
+        },
+        // Coordinates captured from student phone
+        deviceLocation: {
+            lat: Number,
+            lng: Number
+        },
         // Timestamp of when the student scanned the QR or was marked present
         markedAt: {
             type: Date

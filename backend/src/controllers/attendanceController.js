@@ -65,7 +65,7 @@ const startSession = async (req, res) => {
 // @route   POST /api/attendance/mark
 // @access  Private/Student
 const markAttendance = async (req, res) => {
-    const { sessionToken, attendanceCode, lat, lng, faceDescriptor } = req.body;
+    const { sessionToken, attendanceCode, lat, lng, accuracy, faceDescriptor } = req.body;
     try {
         const session = await Attendance.findOne({ sessionToken, isActive: true });
 
@@ -119,9 +119,17 @@ const markAttendance = async (req, res) => {
             return res.status(400).json({ message: 'You have already marked your attendance for this class today.' });
         }
 
+        const formattedDistance = Math.round(distance * 10) / 10;
+        const formattedAccuracy = accuracy ? Math.round(accuracy * 10) / 10 : null;
+        const formattedFaceDistance = Math.round(faceDistance * 100) / 100;
+
         session.records.push({
             student: req.user._id,
             status: 'Present',
+            distance: formattedDistance,
+            accuracy: formattedAccuracy,
+            faceDistance: formattedFaceDistance,
+            deviceLocation: { lat, lng },
             markedAt: Date.now()
         });
 
@@ -134,7 +142,165 @@ const markAttendance = async (req, res) => {
             await classDoc.save();
         }
 
-        res.status(200).json({ message: 'Attendance marked successfully' });
+        res.status(200).json({ 
+            message: 'Attendance marked successfully',
+            distance: formattedDistance,
+            accuracy: formattedAccuracy,
+            faceDistance: formattedFaceDistance
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+// Helper: Compile detailed session attendance report with distances & roster
+const buildSessionReport = (session) => {
+    const enrolledStudents = session.class?.students || [];
+    const markedMap = new Map();
+
+    session.records.forEach(rec => {
+        if (rec.student && rec.student._id) {
+            markedMap.set(rec.student._id.toString(), rec);
+        }
+    });
+
+    const studentReport = enrolledStudents.map(student => {
+        const record = markedMap.get(student._id.toString());
+        if (record) {
+            return {
+                studentId: student._id,
+                name: student.name,
+                idNumber: student.idNumber || 'N/A',
+                email: student.email,
+                status: record.status,
+                distance: record.distance !== undefined ? record.distance : null,
+                accuracy: record.accuracy !== undefined ? record.accuracy : null,
+                faceDistance: record.faceDistance !== undefined ? record.faceDistance : null,
+                markedAt: record.markedAt
+            };
+        } else {
+            return {
+                studentId: student._id,
+                name: student.name,
+                idNumber: student.idNumber || 'N/A',
+                email: student.email,
+                status: 'Absent',
+                distance: null,
+                accuracy: null,
+                faceDistance: null,
+                markedAt: null
+            };
+        }
+    });
+
+    // Also include any students who marked attendance but weren't pre-enrolled
+    session.records.forEach(rec => {
+        if (rec.student && !enrolledStudents.some(s => s._id.toString() === rec.student._id.toString())) {
+            studentReport.push({
+                studentId: rec.student._id,
+                name: rec.student.name,
+                idNumber: rec.student.idNumber || 'N/A',
+                email: rec.student.email,
+                status: rec.status,
+                distance: rec.distance !== undefined ? rec.distance : null,
+                accuracy: rec.accuracy !== undefined ? rec.accuracy : null,
+                faceDistance: rec.faceDistance !== undefined ? rec.faceDistance : null,
+                markedAt: rec.markedAt
+            });
+        }
+    });
+
+    // Sort: Present first (sorted by distance ascending), then Absent (alphabetical)
+    studentReport.sort((a, b) => {
+        if (a.status === 'Present' && b.status !== 'Present') return -1;
+        if (a.status !== 'Present' && b.status === 'Present') return 1;
+        if (a.status === 'Present' && b.status === 'Present') {
+            return (a.distance || 0) - (b.distance || 0);
+        }
+        return a.name.localeCompare(b.name);
+    });
+
+    const presentCount = studentReport.filter(s => s.status === 'Present').length;
+    const absentCount = studentReport.filter(s => s.status === 'Absent').length;
+    const totalStudents = studentReport.length;
+    const attendanceRate = totalStudents > 0 ? Math.round((presentCount / totalStudents) * 100) : 0;
+
+    const presentDistances = studentReport
+        .filter(s => s.status === 'Present' && s.distance !== null)
+        .map(s => s.distance);
+    const avgDistance = presentDistances.length > 0
+        ? Math.round((presentDistances.reduce((a, b) => a + b, 0) / presentDistances.length) * 10) / 10
+        : 0;
+
+    return {
+        sessionId: session._id,
+        className: session.class?.name || 'Class',
+        subjectName: session.class?.subject?.name || 'Subject',
+        date: session.date,
+        attendanceCode: session.attendanceCode,
+        radius: session.radius,
+        location: session.location,
+        isActive: session.isActive,
+        totalStudents,
+        presentCount,
+        absentCount,
+        attendanceRate,
+        avgDistance,
+        students: studentReport
+    };
+};
+
+// @desc    End/Terminate an attendance session and get complete session report
+// @route   POST /api/attendance/stop/:id
+// @access  Private/Faculty
+const stopSession = async (req, res) => {
+    try {
+        const session = await Attendance.findById(req.params.id)
+            .populate({ 
+                path: 'class', 
+                populate: [
+                    { path: 'subject' },
+                    { path: 'students', select: 'name email idNumber department course year' }
+                ] 
+            })
+            .populate('records.student', 'name email idNumber department course year');
+
+        if (!session) {
+            return res.status(404).json({ message: 'Session not found' });
+        }
+
+        // Close session
+        session.isActive = false;
+        await session.save();
+
+        const report = buildSessionReport(session);
+        res.status(200).json(report);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+// @desc    Get session summary report by ID
+// @route   GET /api/attendance/session/:id
+// @access  Private
+const getSessionSummary = async (req, res) => {
+    try {
+        const session = await Attendance.findById(req.params.id)
+            .populate({ 
+                path: 'class', 
+                populate: [
+                    { path: 'subject' },
+                    { path: 'students', select: 'name email idNumber department course year' }
+                ] 
+            })
+            .populate('records.student', 'name email idNumber department course year');
+
+        if (!session) {
+            return res.status(404).json({ message: 'Session not found' });
+        }
+
+        const report = buildSessionReport(session);
+        res.status(200).json(report);
     } catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
     }
@@ -305,5 +471,8 @@ module.exports = {
     markAttendance,
     getActiveSession,
     getAttendanceRecords,
-    getStudentStats
+    getStudentStats,
+    stopSession,
+    getSessionSummary
 };
+

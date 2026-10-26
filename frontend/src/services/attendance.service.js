@@ -63,12 +63,34 @@ const getStudentStats = async () => {
     return response.json();
 };
 
+const stopSession = async (sessionId) => {
+    const response = await fetch(API_URL + 'stop/' + sessionId, {
+        method: 'POST',
+        headers: getAuthHeaders()
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to stop session');
+    return data;
+};
+
+const getSessionSummary = async (sessionId) => {
+    const response = await fetch(API_URL + 'session/' + sessionId, {
+        headers: getAuthHeaders()
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to fetch session summary');
+    return data;
+};
+
 const attendanceService = {
     startSession,
     markAttendance,
     getActiveSession,
     getRecords,
-    getStudentStats
+    getStudentStats,
+    stopSession,
+    getSessionSummary
 };
 
 export default attendanceService;
+

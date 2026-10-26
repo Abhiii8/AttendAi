@@ -4,6 +4,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 import Webcam from 'react-webcam';
 import * as faceapi from 'face-api.js';
 import attendanceService from '../services/attendance.service';
+import { getHighAccuracyCoordinates } from '../utils/geo';
 
 export default function ScanQR() {
   const location = useLocation();
@@ -150,11 +151,12 @@ export default function ScanQR() {
     setErrorMsg('');
 
     try {
-      const position = await getCoordinates().catch(err => {
-        throw new Error("Location access required for Geofencing verification. " + err.message);
+      const position = await getHighAccuracyCoordinates(4000).catch(err => {
+        throw new Error("High-precision GPS access required for Geofencing verification. " + err.message);
       });
       const lat = position.coords.latitude;
       const lng = position.coords.longitude;
+      const accuracy = position.coords.accuracy;
 
       const imageSrc = webcamRef.current.getScreenshot();
       if (!imageSrc) throw new Error("Failed to access camera.");
@@ -174,10 +176,12 @@ export default function ScanQR() {
         attendanceCode,
         lat,
         lng,
+        accuracy,
         faceDescriptor
       });
 
-      setSuccessMsg(response.message || "Attendance securely marked!");
+      const distText = response.distance !== undefined ? ` (${response.distance}m away)` : '';
+      setSuccessMsg((response.message || "Attendance securely marked!") + distText);
       setStep('success');
 
     } catch (err) {

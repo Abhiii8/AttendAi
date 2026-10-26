@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Calendar, Printer, Play, CheckCircle, Plus } from 'lucide-react';
 import facultyService from '../services/faculty.service';
 import attendanceService from '../services/attendance.service';
+import { getHighAccuracyCoordinates } from '../utils/geo';
 
 const TIMESLOTS = [
   { id: '1', label: '7.30 AM - 8.15 AM', start: '07:30', end: '08:15' },
@@ -126,21 +127,18 @@ export default function Timetable() {
     setSessionModalState(prev => ({ ...prev, isProcessing: true, error: null }));
     try {
       const code = Math.floor(1000 + Math.random() * 9000).toString();
-      navigator.geolocation.getCurrentPosition(async (position) => {
-        const payload = {
-          attendanceCode: code,
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          radius: parseInt(sessionModalState.radius, 10)
-        };
-        await attendanceService.startSession(sessionModalState.classDetails._id, payload);
-        
-        setSessionModalState(prev => ({ ...prev, isProcessing: false, successCode: code }));
-      }, (geoErr) => {
-          setSessionModalState(prev => ({ ...prev, isProcessing: false, error: 'Could not access GPS. Please allow location access.' }));
-      });
+      const position = await getHighAccuracyCoordinates(4000);
+      const payload = {
+        attendanceCode: code,
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+        radius: parseInt(sessionModalState.radius, 10)
+      };
+      await attendanceService.startSession(sessionModalState.classDetails._id, payload);
+      
+      setSessionModalState(prev => ({ ...prev, isProcessing: false, successCode: code }));
     } catch (err) {
-      setSessionModalState(prev => ({ ...prev, isProcessing: false, error: err.message }));
+      setSessionModalState(prev => ({ ...prev, isProcessing: false, error: err.message || 'Could not access high-accuracy GPS. Please allow location access.' }));
     }
   };
   const handleMarkAttendance = (cls) => {
