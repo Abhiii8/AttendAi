@@ -20,9 +20,15 @@ app.use(async (req, res, next) => {
     }
 });
 
-// Basic Route
-app.get('/', (req, res) => {
-    res.send('AttendAI API is running...');
+const path = require('path');
+const publicPath = path.join(__dirname, 'public');
+
+// Serve static frontend assets
+app.use(express.static(publicPath));
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', message: 'AttendAI API is running...' });
 });
 
 const authRoutes = require('./src/routes/authRoutes');
@@ -34,6 +40,14 @@ app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api', classRoutes);
 app.use('/api/attendance', attendanceRoutes);
+
+// SPA fallback: send index.html for all GET requests that didn't match an API route
+app.use((req, res, next) => {
+    if (req.method === 'GET' && !req.path.startsWith('/api')) {
+        return res.sendFile(path.join(publicPath, 'index.html'));
+    }
+    next();
+});
 
 const PORT = process.env.PORT || 5000;
 

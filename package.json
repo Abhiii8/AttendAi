@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Smart Biometric & Geofenced Attendance Platform",
   "scripts": {
-    "build": "cd frontend && npm install && npm run build"
+    "build": "cd frontend && npm install && npm run build && cd .. && node -e \"const fs = require('fs'); fs.rmSync('backend/public', { recursive: true, force: true }); fs.cpSync('frontend/dist', 'backend/public', { recursive: true });\""
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
