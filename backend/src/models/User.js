@@ -33,8 +33,14 @@ const userSchema = new mongoose.Schema({
         ref: 'Department'
     },
     course: {
-        type: String
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Course'
     },
+    // For Faculty: 1 faculty teaches multiple subjects
+    assignedSubjects: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Subject'
+    }],
     year: {
         type: String
     },

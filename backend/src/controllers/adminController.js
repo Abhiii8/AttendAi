@@ -297,6 +297,8 @@ const updateDepartment = async (req, res) => {
 
 // @desc    Delete a department
 // @route   DELETE /api/admin/departments/:id
+// @desc    Delete a department
+// @route   DELETE /api/admin/departments/:id
 // @access  Private/Admin
 const deleteDepartment = async (req, res) => {
     try {
@@ -311,6 +313,132 @@ const deleteDepartment = async (req, res) => {
     }
 };
 
+const Course = require('../models/Course');
+
+// @desc    Get all courses (branches)
+// @route   GET /api/admin/courses
+// @access  Private
+const getCourses = async (req, res) => {
+    try {
+        const courses = await Course.find().populate('department', 'name code');
+        res.json(courses);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+// @desc    Create a new course (branch)
+// @route   POST /api/admin/courses
+// @access  Private/Admin
+const createCourse = async (req, res) => {
+    try {
+        const { name, code, department, durationYears, totalSemesters, description } = req.body;
+        if (!name || !code || !department) {
+            return res.status(400).json({ message: 'Name, code, and department are required' });
+        }
+
+        const existing = await Course.findOne({ code: code.toUpperCase() });
+        if (existing) {
+            return res.status(400).json({ message: 'Course with this code already exists' });
+        }
+
+        const course = await Course.create({
+            name,
+            code: code.toUpperCase(),
+            department,
+            durationYears: durationYears || 3,
+            totalSemesters: totalSemesters || 6,
+            description
+        });
+
+        const populated = await course.populate('department', 'name code');
+        res.status(201).json(populated);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+// @desc    Update a course
+// @route   PUT /api/admin/courses/:id
+// @access  Private/Admin
+const updateCourse = async (req, res) => {
+    try {
+        const course = await Course.findById(req.params.id);
+        if (!course) {
+            return res.status(404).json({ message: 'Course not found' });
+        }
+
+        course.name = req.body.name || course.name;
+        course.code = req.body.code ? req.body.code.toUpperCase() : course.code;
+        course.department = req.body.department || course.department;
+        course.durationYears = req.body.durationYears || course.durationYears;
+        course.totalSemesters = req.body.totalSemesters || course.totalSemesters;
+        course.description = req.body.description !== undefined ? req.body.description : course.description;
+
+        const updated = await course.save();
+        const populated = await updated.populate('department', 'name code');
+        res.json(populated);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+// @desc    Delete a course
+// @route   DELETE /api/admin/courses/:id
+// @access  Private/Admin
+const deleteCourse = async (req, res) => {
+    try {
+        const course = await Course.findById(req.params.id);
+        if (!course) {
+            return res.status(404).json({ message: 'Course not found' });
+        }
+        await Course.deleteOne({ _id: course._id });
+        res.json({ message: 'Course removed' });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+// @desc    Get complete academic department hierarchy
+// @route   GET /api/admin/department-hierarchy
+// @access  Private
+const getDepartmentHierarchy = async (req, res) => {
+    try {
+        const departments = await Department.find();
+        const hierarchy = [];
+
+        for (const dept of departments) {
+            const courses = await Course.find({ department: dept._id });
+            const faculty = await User.find({ department: dept._id, role: 'faculty' })
+                .select('name email idNumber assignedSubjects')
+                .populate('assignedSubjects', 'name code credits');
+            const subjects = await Subject.find({ department: dept._id })
+                .populate('course', 'name code');
+            const studentCount = await User.countDocuments({ department: dept._id, role: 'student' });
+
+            hierarchy.push({
+                department: dept,
+                branches: courses,
+                facultyCount: faculty.length,
+                faculty: faculty.map(f => ({
+                    id: f._id,
+                    name: f.name,
+                    email: f.email,
+                    idNumber: f.idNumber,
+                    subjectsCount: f.assignedSubjects?.length || 0,
+                    subjects: f.assignedSubjects || []
+                })),
+                subjects,
+                studentCount
+            });
+        }
+
+        res.status(200).json(hierarchy);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
 module.exports = {
     getStats,
     getUsers,
@@ -320,5 +448,10 @@ module.exports = {
     getDepartments,
     createDepartment,
     updateDepartment,
-    deleteDepartment
+    deleteDepartment,
+    getCourses,
+    createCourse,
+    updateCourse,
+    deleteCourse,
+    getDepartmentHierarchy
 };

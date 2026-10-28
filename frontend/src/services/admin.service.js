@@ -64,13 +64,31 @@ const getDepartments = async () => {
     return response.json();
 };
 
+const getDepartmentHierarchy = async () => {
+    const response = await fetch(API_URL + 'department-hierarchy', {
+        headers: getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Failed to fetch department hierarchy');
+    return response.json();
+};
+
+const getCourses = async () => {
+    const response = await fetch(API_URL + 'courses', {
+        headers: getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Failed to fetch courses');
+    return response.json();
+};
+
 const adminService = {
     getStats,
     getUsers,
     createUser,
     updateUser,
     deleteUser,
-    getDepartments
+    getDepartments,
+    getDepartmentHierarchy,
+    getCourses
 };
 
 export default adminService;

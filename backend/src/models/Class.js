@@ -5,6 +5,10 @@ const classSchema = new mongoose.Schema({
         type: String,
         required: [true, 'Please add a class name (e.g., TY-BTech-A)']
     },
+    course: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Course'
+    },
     subject: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Subject',

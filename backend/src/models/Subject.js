@@ -16,6 +16,15 @@ const subjectSchema = new mongoose.Schema({
         ref: 'Department',
         required: false
     },
+    course: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Course',
+        required: false
+    },
+    semester: {
+        type: Number,
+        default: 1
+    },
     credits: {
         type: Number,
         required: true,

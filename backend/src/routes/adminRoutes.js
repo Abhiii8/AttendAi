@@ -9,11 +9,21 @@ const {
     getDepartments,
     createDepartment,
     updateDepartment,
-    deleteDepartment
+    deleteDepartment,
+    getCourses,
+    createCourse,
+    updateCourse,
+    deleteCourse,
+    getDepartmentHierarchy
 } = require('../controllers/adminController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
 router.use(protect);
+
+// Department hierarchy view accessible to all authenticated users
+router.get('/department-hierarchy', getDepartmentHierarchy);
+router.get('/courses', getCourses);
+
 router.use(authorize('admin'));
 
 router.get('/stats', getStats);
@@ -24,6 +34,7 @@ router.route('/users')
 router.route('/users/:id')
     .put(updateUser)
     .delete(deleteUser);
+
 router.route('/departments')
     .get(getDepartments)
     .post(createDepartment);
@@ -31,5 +42,12 @@ router.route('/departments')
 router.route('/departments/:id')
     .put(updateDepartment)
     .delete(deleteDepartment);
+
+router.route('/courses')
+    .post(createCourse);
+
+router.route('/courses/:id')
+    .put(updateCourse)
+    .delete(deleteCourse);
 
 module.exports = router;
