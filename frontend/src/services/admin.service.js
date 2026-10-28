@@ -80,6 +80,44 @@ const getCourses = async () => {
     return response.json();
 };
 
+const createCourse = async (courseData) => {
+    const response = await fetch(API_URL + 'courses', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(courseData)
+    });
+    if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || 'Failed to create course');
+    }
+    return response.json();
+};
+
+const updateCourse = async (id, courseData) => {
+    const response = await fetch(API_URL + `courses/${id}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(courseData)
+    });
+    if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || 'Failed to update course');
+    }
+    return response.json();
+};
+
+const deleteCourse = async (id) => {
+    const response = await fetch(API_URL + `courses/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+    });
+    if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || 'Failed to delete course');
+    }
+    return response.json();
+};
+
 const adminService = {
     getStats,
     getUsers,
@@ -88,7 +126,10 @@ const adminService = {
     deleteUser,
     getDepartments,
     getDepartmentHierarchy,
-    getCourses
+    getCourses,
+    createCourse,
+    updateCourse,
+    deleteCourse
 };
 
 export default adminService;

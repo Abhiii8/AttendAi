@@ -5,6 +5,7 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
 import Departments from './pages/Departments';
+import Courses from './pages/Courses';
 import Subjects from './pages/Subjects';
 import FacultyStudents from './pages/FacultyStudents';
 import GenerateQR from './pages/GenerateQR';
@@ -31,6 +32,7 @@ function App() {
           <Route path="timetable" element={<Timetable />} />
           <Route path="users" element={<Users />} />
           <Route path="departments" element={<Departments />} />
+          <Route path="courses" element={<Courses />} />
           <Route path="subjects" element={<Subjects />} />
           <Route path="classes" element={<AdminClasses />} />
           <Route path="my-classes" element={<FacultyClasses />} />

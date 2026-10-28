@@ -45,6 +45,7 @@ export default function Layout() {
           { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
           { name: 'User Management', path: '/dashboard/users', icon: Users },
           { name: 'Departments', path: '/dashboard/departments', icon: BookOpen },
+          { name: 'Courses / Branches', path: '/dashboard/courses', icon: BookOpen },
           { name: 'Subjects', path: '/dashboard/subjects', icon: BookOpen },
           { name: 'All Classes', path: '/dashboard/classes', icon: BookOpen },
         ];

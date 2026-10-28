@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import adminService from '../services/admin.service';
+import facultyService from '../services/faculty.service';
 
 export default function Users() {
   const [users, setUsers] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -15,7 +17,8 @@ export default function Users() {
     password: '',
     idNumber: '',
     role: 'faculty',
-    department: ''
+    department: '',
+    assignedSubjects: []
   });
   const [creating, setCreating] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
@@ -23,6 +26,7 @@ export default function Users() {
   useEffect(() => {
     fetchUsers();
     fetchDepartments();
+    fetchSubjects();
   }, []);
 
   const fetchUsers = () => {
@@ -36,6 +40,12 @@ export default function Users() {
   const fetchDepartments = () => {
     adminService.getDepartments()
       .then(data => setDepartments(data))
+      .catch(err => console.error(err));
+  };
+
+  const fetchSubjects = () => {
+    facultyService.getSubjects()
+      .then(data => setSubjects(data || []))
       .catch(err => console.error(err));
   };
 
@@ -95,15 +105,26 @@ export default function Users() {
       idNumber: user.idNumber || '',
       role: user.role,
       department: user.department?._id || user.department || '',
-      course: user.course || '',
-      year: user.year || ''
+      course: user.course?._id || user.course || '',
+      year: user.year || '',
+      assignedSubjects: user.assignedSubjects ? user.assignedSubjects.map(s => s._id || s) : []
     });
     setShowModal(true);
   };
 
   const openCreateModal = () => {
     setEditingUser(null);
-    setFormData({ name: '', email: '', password: '', idNumber: '', role: 'faculty', department: '' });
+    setFormData({ 
+      name: '', 
+      email: '', 
+      password: '', 
+      idNumber: '', 
+      role: 'faculty', 
+      department: '', 
+      course: '', 
+      year: '', 
+      assignedSubjects: [] 
+    });
     setShowModal(true);
   };
 
@@ -164,6 +185,15 @@ export default function Users() {
                       <div className="min-w-0 flex-1">
                         <p className="font-bold text-white text-[14px] truncate">{u.name}</p>
                         <p className="text-[12px] text-white/40 mt-0.5 font-medium truncate">ID: {u.idNumber || 'N/A'}</p>
+                        {u.role === 'faculty' && u.assignedSubjects && u.assignedSubjects.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {u.assignedSubjects.map(sub => (
+                              <span key={sub._id || sub} className="text-[10px] font-mono bg-purple-500/10 text-purple-300 border border-purple-500/20 px-1.5 py-0.5 rounded">
+                                {sub.code || sub.name || 'Subject'}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </td>
@@ -266,6 +296,50 @@ export default function Users() {
                     className="w-full bg-[#12131a] border border-border/10 rounded-full px-5 py-3 text-sm text-white focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50"
                   />
                 </div>
+
+                {formData.role === 'faculty' && (
+                  <div className="p-4 bg-[#1a1c25] rounded-[24px] border border-border/10 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[11px] font-semibold text-text-muted uppercase tracking-wider ml-1">
+                        Assigned Subjects ({formData.assignedSubjects?.length || 0} selected)
+                      </label>
+                      <span className="text-[10px] text-primary font-mono">1 Faculty → Multi-Subject</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto p-2.5 bg-[#12131a] rounded-xl border border-white/5">
+                      {subjects.map(s => {
+                        const isChecked = formData.assignedSubjects?.includes(s._id);
+                        return (
+                          <label 
+                            key={s._id} 
+                            className={`flex items-center gap-2 p-2 rounded-lg text-xs cursor-pointer border transition-all ${
+                              isChecked 
+                                ? 'bg-primary/10 border-primary/40 text-white font-medium' 
+                                : 'border-transparent text-text-muted hover:bg-white/5'
+                            }`}
+                          >
+                            <input 
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                const current = formData.assignedSubjects || [];
+                                const updated = e.target.checked 
+                                  ? [...current, s._id] 
+                                  : current.filter(id => id !== s._id);
+                                setFormData({ ...formData, assignedSubjects: updated });
+                              }}
+                              className="rounded border-white/20 text-primary focus:ring-0"
+                            />
+                            <span className="font-mono text-primary font-bold">{s.code}</span>
+                            <span className="truncate">{s.name}</span>
+                          </label>
+                        );
+                      })}
+                      {subjects.length === 0 && (
+                        <p className="text-xs text-text-muted col-span-2">No subjects available yet.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {formData.role === 'student' && (
                   <div className="grid grid-cols-2 gap-5 p-4 bg-[#1a1c25] rounded-[24px] border border-border/10 mt-4">
