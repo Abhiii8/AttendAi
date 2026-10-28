@@ -150,26 +150,46 @@ export default function Departments() {
       </div>
 
       {/* Relational Foreign Key Explanation Card (Viva Helper) */}
-      <div className="mb-8 p-5 bg-gradient-to-r from-blue-900/20 via-purple-900/10 to-primary/10 border border-blue-500/20 rounded-2xl relative overflow-hidden">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className="p-2.5 bg-blue-500/10 rounded-xl text-blue-400 mt-0.5 border border-blue-500/20">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+      <div className="mb-8 p-5 md:p-6 bg-gradient-to-r from-blue-950/40 via-purple-950/30 to-[#0e1626] border border-blue-500/30 rounded-2xl relative overflow-hidden shadow-xl">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+          <div className="flex items-start gap-3.5">
+            <div className="p-3 bg-blue-500/10 rounded-xl text-blue-400 mt-1 border border-blue-500/30 shrink-0">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
             </div>
             <div>
-              <h4 className="text-white font-bold text-sm flex items-center gap-2">
-                Relational Model & Foreign Key Connections in MongoDB
-                <span className="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full uppercase font-mono">Schema Architecture</span>
-              </h4>
-              <p className="text-text-muted text-xs mt-1 leading-relaxed">
-                Relationships are normalized across collections using Mongoose <code className="text-primary font-mono font-semibold">ObjectId References (ref)</code>. 
-                1 Department links to <strong className="text-white">multiple Courses/Branches</strong>, and each Faculty links to <strong className="text-white">multiple Subjects</strong> via <code className="text-primary font-mono font-semibold">assignedSubjects: [&#123; type: ObjectId, ref: 'Subject' &#125;]</code>.
+              <div className="flex flex-wrap items-center gap-2">
+                <h4 className="text-white font-bold text-base">
+                  Database Foreign Keys & Referential Integrity System
+                </h4>
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full font-mono uppercase font-bold border border-emerald-500/30">Active Protection</span>
+              </div>
+              <p className="text-text-muted text-xs md:text-sm mt-1.5 leading-relaxed max-w-4xl">
+                In MongoDB NoSQL, relational foreign keys are implemented at the <strong>Mongoose Schema & Application Layer</strong>. 
+                Our backend guarantees full referential integrity: 
+                <span className="text-white font-medium"> (1) Foreign ID Existence Verification</span> rejects insertions if parent records do not exist; 
+                <span className="text-white font-medium"> (2) RESTRICT Deletion Protection</span> prevents deleting a Department or Branch if subjects or faculty are still linked; 
+                <span className="text-white font-medium"> (3) Normalized Joins</span> are executed via <code className="text-primary font-mono font-semibold">.populate()</code>.
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 self-start md:self-auto shrink-0 text-[11px] font-mono text-white/60">
-            <span className="bg-black/40 px-2.5 py-1.5 rounded-lg border border-white/5">JOIN: .populate()</span>
-            <span className="bg-black/40 px-2.5 py-1.5 rounded-lg border border-white/5">FK: ObjectId(ref)</span>
+          
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 gap-2 shrink-0">
+            <div className="bg-black/50 px-3 py-2 rounded-xl border border-white/5 text-center">
+              <span className="text-[10px] uppercase text-text-muted font-bold block">Foreign Key</span>
+              <span className="text-xs text-primary font-mono font-semibold">ObjectId(ref)</span>
+            </div>
+            <div className="bg-black/50 px-3 py-2 rounded-xl border border-white/5 text-center">
+              <span className="text-[10px] uppercase text-text-muted font-bold block">Integrity Check</span>
+              <span className="text-xs text-blue-400 font-mono font-semibold">RESTRICT Delete</span>
+            </div>
+            <div className="bg-black/50 px-3 py-2 rounded-xl border border-white/5 text-center">
+              <span className="text-[10px] uppercase text-text-muted font-bold block">Existence Check</span>
+              <span className="text-xs text-amber-400 font-mono font-semibold">400 Bad Request</span>
+            </div>
+            <div className="bg-black/50 px-3 py-2 rounded-xl border border-white/5 text-center">
+              <span className="text-[10px] uppercase text-text-muted font-bold block">SQL Join Match</span>
+              <span className="text-xs text-emerald-400 font-mono font-semibold">.populate()</span>
+            </div>
           </div>
         </div>
       </div>

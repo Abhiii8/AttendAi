@@ -148,8 +148,11 @@ const getUsers = async (req, res) => {
 // @desc    Create a new user (Admin, Faculty, Student)
 // @route   POST /api/admin/users
 // @access  Private/Admin
+// @desc    Create a new user (Admin, Faculty, Student)
+// @route   POST /api/admin/users
+// @access  Private/Admin
 const createUser = async (req, res) => {
-    const { name, email, password, role, course, year, autoAssignEnrollment, department } = req.body;
+    const { name, email, password, role, course, year, autoAssignEnrollment, department, assignedSubjects } = req.body;
     let { idNumber } = req.body;
 
     try {
@@ -157,6 +160,30 @@ const createUser = async (req, res) => {
 
         if (userExists) {
             return res.status(400).json({ message: 'User already exists' });
+        }
+
+        // Foreign Key Check: Department exists?
+        if (department) {
+            const deptExists = await Department.findById(department);
+            if (!deptExists) {
+                return res.status(400).json({ message: 'Foreign Key Error: The referenced Department does not exist.' });
+            }
+        }
+
+        // Foreign Key Check: Course exists?
+        if (course) {
+            const courseExists = await Course.findById(course);
+            if (!courseExists) {
+                return res.status(400).json({ message: 'Foreign Key Error: The referenced Course does not exist.' });
+            }
+        }
+
+        // Foreign Key Check: Assigned Subjects exist?
+        if (assignedSubjects && Array.isArray(assignedSubjects) && assignedSubjects.length > 0) {
+            const validCount = await Subject.countDocuments({ _id: { $in: assignedSubjects } });
+            if (validCount !== assignedSubjects.length) {
+                return res.status(400).json({ message: 'Foreign Key Error: One or more assigned Subjects do not exist.' });
+            }
         }
 
         // Auto-generate enrollment number for students if requested
@@ -185,7 +212,8 @@ const createUser = async (req, res) => {
             idNumber,
             department: department || undefined,
             course: role === 'student' ? course : undefined,
-            year: role === 'student' ? year : undefined
+            year: role === 'student' ? year : undefined,
+            assignedSubjects: role === 'faculty' ? (assignedSubjects || []) : []
         });
 
         res.status(201).json({
@@ -235,12 +263,37 @@ const updateUser = async (req, res) => {
             return res.status(404).json({ message: 'User not found' });
         }
 
+        // Foreign Key Check if updating department
+        if (req.body.department) {
+            const deptExists = await Department.findById(req.body.department);
+            if (!deptExists) {
+                return res.status(400).json({ message: 'Foreign Key Error: The referenced Department does not exist.' });
+            }
+            user.department = req.body.department;
+        }
+
+        // Foreign Key Check if updating course
+        if (req.body.course) {
+            const courseExists = await Course.findById(req.body.course);
+            if (!courseExists) {
+                return res.status(400).json({ message: 'Foreign Key Error: The referenced Course does not exist.' });
+            }
+            user.course = req.body.course;
+        }
+
+        // Foreign Key Check if updating assignedSubjects
+        if (req.body.assignedSubjects && Array.isArray(req.body.assignedSubjects)) {
+            const validCount = await Subject.countDocuments({ _id: { $in: req.body.assignedSubjects } });
+            if (validCount !== req.body.assignedSubjects.length) {
+                return res.status(400).json({ message: 'Foreign Key Error: One or more assigned Subjects do not exist.' });
+            }
+            user.assignedSubjects = req.body.assignedSubjects;
+        }
+
         user.name = req.body.name || user.name;
         user.email = req.body.email || user.email;
         user.role = req.body.role || user.role;
         user.idNumber = req.body.idNumber || user.idNumber;
-        user.department = req.body.department || user.department;
-        user.course = req.body.course || user.course;
         user.year = req.body.year || user.year;
 
         if (req.body.password) {
@@ -268,8 +321,19 @@ const deleteUser = async (req, res) => {
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
+
+        // Referential Integrity Check: If faculty, prevent deleting if active classes or attendance sessions exist
+        if (user.role === 'faculty') {
+            const activeClasses = await Class.countDocuments({ faculty: user._id });
+            if (activeClasses > 0) {
+                return res.status(400).json({
+                    message: `Referential Integrity Error (Foreign Key RESTRICT): Cannot delete faculty '${user.name}'. They have ${activeClasses} active class session(s) assigned. Reassign them first.`
+                });
+            }
+        }
+
         await User.deleteOne({ _id: user._id });
-        res.json({ message: 'User removed' });
+        res.json({ message: 'User removed successfully' });
     } catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
     }
@@ -306,8 +370,21 @@ const deleteDepartment = async (req, res) => {
         if (!department) {
             return res.status(404).json({ message: 'Department not found' });
         }
+
+        // Foreign Key Integrity Check (RESTRICT mode):
+        // Prevent deletion if child branches (courses), subjects, or users are linked
+        const linkedCourses = await Course.countDocuments({ department: department._id });
+        const linkedUsers = await User.countDocuments({ department: department._id });
+        const linkedSubjects = await Subject.countDocuments({ department: department._id });
+
+        if (linkedCourses > 0 || linkedUsers > 0 || linkedSubjects > 0) {
+            return res.status(400).json({
+                message: `Referential Integrity Error (Foreign Key RESTRICT): Cannot delete department '${department.name}'. It still has ${linkedCourses} branch(es), ${linkedSubjects} subject(s), and ${linkedUsers} user(s) linked to it. Delete or reassign children first.`
+            });
+        }
+
         await Department.deleteOne({ _id: department._id });
-        res.json({ message: 'Department removed' });
+        res.json({ message: 'Department removed successfully' });
     } catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
     }
@@ -335,6 +412,14 @@ const createCourse = async (req, res) => {
         const { name, code, department, durationYears, totalSemesters, description } = req.body;
         if (!name || !code || !department) {
             return res.status(400).json({ message: 'Name, code, and department are required' });
+        }
+
+        // Foreign Key Check: Verify referenced Department exists
+        const deptExists = await Department.findById(department);
+        if (!deptExists) {
+            return res.status(400).json({ 
+                message: 'Foreign Key Error: The referenced Department does not exist in the database.' 
+            });
         }
 
         const existing = await Course.findOne({ code: code.toUpperCase() });
@@ -368,9 +453,19 @@ const updateCourse = async (req, res) => {
             return res.status(404).json({ message: 'Course not found' });
         }
 
+        // If department is updated, verify it exists (Foreign Key Check)
+        if (req.body.department) {
+            const deptExists = await Department.findById(req.body.department);
+            if (!deptExists) {
+                return res.status(400).json({ 
+                    message: 'Foreign Key Error: The referenced Department does not exist in the database.' 
+                });
+            }
+            course.department = req.body.department;
+        }
+
         course.name = req.body.name || course.name;
         course.code = req.body.code ? req.body.code.toUpperCase() : course.code;
-        course.department = req.body.department || course.department;
         course.durationYears = req.body.durationYears || course.durationYears;
         course.totalSemesters = req.body.totalSemesters || course.totalSemesters;
         course.description = req.body.description !== undefined ? req.body.description : course.description;
@@ -392,8 +487,20 @@ const deleteCourse = async (req, res) => {
         if (!course) {
             return res.status(404).json({ message: 'Course not found' });
         }
+
+        // Foreign Key Integrity Check (RESTRICT mode):
+        // Prevent deletion if child subjects or enrolled students exist
+        const linkedSubjects = await Subject.countDocuments({ course: course._id });
+        const linkedStudents = await User.countDocuments({ course: course._id });
+
+        if (linkedSubjects > 0 || linkedStudents > 0) {
+            return res.status(400).json({
+                message: `Referential Integrity Error (Foreign Key RESTRICT): Cannot delete course '${course.name}'. It contains ${linkedSubjects} subject(s) and ${linkedStudents} enrolled student(s). Reassign them first.`
+            });
+        }
+
         await Course.deleteOne({ _id: course._id });
-        res.json({ message: 'Course removed' });
+        res.json({ message: 'Course removed successfully' });
     } catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
     }

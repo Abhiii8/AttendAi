@@ -1,5 +1,7 @@
 const Class = require('../models/Class');
 const Subject = require('../models/Subject');
+const Department = require('../models/Department');
+const Course = require('../models/Course');
 
 // @desc    Get all classes for logged in user (Faculty or Student)
 // @route   GET /api/classes
@@ -35,6 +37,14 @@ const createClass = async (req, res) => {
     const { name, subject, schedule, faculty } = req.body;
     const facultyId = faculty || req.user._id;
     try {
+        // Foreign Key Validation: Subject must exist in database
+        if (subject) {
+            const subjectDoc = await Subject.findById(subject);
+            if (!subjectDoc) {
+                return res.status(400).json({ message: 'Foreign Key Error: Referenced Subject does not exist in the database.' });
+            }
+        }
+
         // Look for an existing class by this name and faculty
         let existingClass = await Class.findOne({ name, faculty: facultyId });
         
@@ -72,7 +82,7 @@ const createClass = async (req, res) => {
 // @access  Private
 const getSubjects = async (req, res) => {
     try {
-        const subjects = await Subject.find().populate('department');
+        const subjects = await Subject.find().populate('department').populate('course');
         res.status(200).json(subjects);
     } catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
@@ -83,21 +93,40 @@ const getSubjects = async (req, res) => {
 // @route   POST /api/subjects
 // @access  Private (Faculty/Admin)
 const createSubject = async (req, res) => {
-    const { name, code, department } = req.body;
+    const { name, code, department, course, semester, credits } = req.body;
     try {
         if (!name || !code) {
             return res.status(400).json({ message: 'Please provide name and code' });
         }
+
+        // Foreign Key Check: Department exists
+        if (department) {
+            const dept = await Department.findById(department);
+            if (!dept) {
+                return res.status(400).json({ message: 'Foreign Key Error: Referenced Department does not exist in the database.' });
+            }
+        }
+
+        // Foreign Key Check: Course exists
+        if (course) {
+            const crs = await Course.findById(course);
+            if (!crs) {
+                return res.status(400).json({ message: 'Foreign Key Error: Referenced Course does not exist in the database.' });
+            }
+        }
         
-        const subjectExists = await Subject.findOne({ code });
+        const subjectExists = await Subject.findOne({ code: code.toUpperCase() });
         if (subjectExists) {
             return res.status(400).json({ message: 'Subject with this code already exists' });
         }
 
         const subject = await Subject.create({
             name,
-            code,
-            department: department || undefined
+            code: code.toUpperCase(),
+            department: department || undefined,
+            course: course || undefined,
+            semester: semester || 1,
+            credits: credits || 3
         });
 
         res.status(201).json(subject);
