@@ -82,6 +82,17 @@ const getSessionSummary = async (sessionId) => {
     return data;
 };
 
+const getStudentReport = async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    const url = query ? `${API_URL}student-report?${query}` : `${API_URL}student-report`;
+    const response = await fetch(url, {
+        headers: getAuthHeaders()
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Failed to fetch attendance report');
+    return data;
+};
+
 const attendanceService = {
     startSession,
     markAttendance,
@@ -89,7 +100,8 @@ const attendanceService = {
     getRecords,
     getStudentStats,
     stopSession,
-    getSessionSummary
+    getSessionSummary,
+    getStudentReport
 };
 
 export default attendanceService;

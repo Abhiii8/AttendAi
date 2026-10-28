@@ -516,6 +516,258 @@ const getStudentStats = async (req, res) => {
     }
 };
 
+// @desc    Get detailed student attendance report (Daily, Weekly, Monthly, or Custom range) with PDF export readiness
+// @route   GET /api/attendance/student-report
+// @access  Private
+const getStudentAttendanceReport = async (req, res) => {
+    try {
+        let targetStudentId = req.query.studentId;
+
+        // Security: Students can only view their own attendance reports
+        if (req.user.role === 'student') {
+            targetStudentId = req.user._id.toString();
+        }
+
+        const timeframe = req.query.timeframe || 'monthly';
+        let start, end;
+
+        if (timeframe === 'daily') {
+            const base = req.query.date ? new Date(req.query.date) : new Date();
+            start = new Date(base);
+            start.setHours(0, 0, 0, 0);
+            end = new Date(base);
+            end.setHours(23, 59, 59, 999);
+        } else if (timeframe === 'weekly') {
+            end = req.query.endDate ? new Date(req.query.endDate) : new Date();
+            end.setHours(23, 59, 59, 999);
+            start = new Date(end);
+            start.setDate(end.getDate() - 7);
+            start.setHours(0, 0, 0, 0);
+        } else if (timeframe === 'monthly') {
+            end = req.query.endDate ? new Date(req.query.endDate) : new Date();
+            end.setHours(23, 59, 59, 999);
+            start = new Date(end);
+            start.setDate(end.getDate() - 30);
+            start.setHours(0, 0, 0, 0);
+        } else if (timeframe === 'custom') {
+            start = req.query.startDate ? new Date(req.query.startDate) : new Date(0);
+            start.setHours(0, 0, 0, 0);
+            end = req.query.endDate ? new Date(req.query.endDate) : new Date();
+            end.setHours(23, 59, 59, 999);
+        } else {
+            // 'all'
+            start = new Date(0);
+            end = new Date();
+            end.setHours(23, 59, 59, 999);
+        }
+
+        // Case 1: Specific Student Report Requested
+        if (targetStudentId) {
+            const student = await User.findById(targetStudentId)
+                .select('name email idNumber course department year')
+                .populate('course', 'name code')
+                .populate('department', 'name code');
+
+            if (!student) {
+                return res.status(404).json({ message: 'Student profile not found.' });
+            }
+
+            // Find all classes student is enrolled in or attended
+            const studentClasses = await Class.find({ students: student._id }).select('_id name');
+            const attendedClassIds = await Attendance.find({
+                'records.student': student._id,
+                date: { $gte: start, $lte: end }
+            }).distinct('class');
+
+            const allRelevantClassIds = [...new Set([
+                ...studentClasses.map(c => c._id.toString()),
+                ...attendedClassIds.map(id => id.toString())
+            ])];
+
+            const sessions = await Attendance.find({
+                class: { $in: allRelevantClassIds },
+                date: { $gte: start, $lte: end }
+            })
+                .populate({
+                    path: 'class',
+                    populate: [
+                        { path: 'subject', select: 'name code credits' },
+                        { path: 'course', select: 'name code' }
+                    ]
+                })
+                .populate('faculty', 'name email idNumber')
+                .sort({ date: -1 });
+
+            let totalClasses = 0;
+            let attendedClasses = 0;
+            let absentClasses = 0;
+            const subjectMap = {};
+            const sessionLogs = [];
+
+            sessions.forEach(session => {
+                const isEnrolled = session.class?.students 
+                    ? session.class.students.some(s => (s._id || s).toString() === student._id.toString())
+                    : true;
+                
+                const record = session.records.find(r => {
+                    const rSid = r.student?._id ? r.student._id.toString() : (r.student ? r.student.toString() : null);
+                    return rSid === student._id.toString();
+                });
+
+                if (!isEnrolled && !record) return;
+
+                totalClasses++;
+                const isPresent = record && record.status === 'Present';
+                if (isPresent) {
+                    attendedClasses++;
+                } else {
+                    absentClasses++;
+                }
+
+                const subjId = session.class?.subject?._id?.toString() || 'general';
+                const subjName = session.class?.subject?.name || 'General Subject';
+                const subjCode = session.class?.subject?.code || 'GEN';
+                const facultyName = session.faculty?.name || 'Faculty Instructor';
+
+                if (!subjectMap[subjId]) {
+                    subjectMap[subjId] = {
+                        subjectId: subjId,
+                        name: subjName,
+                        code: subjCode,
+                        facultyName,
+                        total: 0,
+                        attended: 0,
+                        absent: 0,
+                        percentage: 0
+                    };
+                }
+
+                subjectMap[subjId].total++;
+                if (isPresent) {
+                    subjectMap[subjId].attended++;
+                } else {
+                    subjectMap[subjId].absent++;
+                }
+
+                const faceDist = record?.faceDistance !== undefined && record.faceDistance !== null ? record.faceDistance : null;
+                let matchQuality = null;
+                if (faceDist !== null) {
+                    matchQuality = faceDist < 0.45 ? 'Perfect Match' : faceDist < 0.58 ? 'High Confidence' : 'Verified';
+                }
+
+                sessionLogs.push({
+                    sessionId: session._id,
+                    date: session.date,
+                    className: session.class?.name || 'Class',
+                    subjectName: subjName,
+                    subjectCode: subjCode,
+                    facultyName,
+                    status: isPresent ? 'Present' : 'Absent',
+                    distance: record?.distance !== undefined && record.distance !== null ? record.distance : null,
+                    faceDistance: faceDist,
+                    matchQuality,
+                    markedAt: record?.markedAt || null
+                });
+            });
+
+            const overallPercentage = totalClasses > 0 ? Math.round((attendedClasses / totalClasses) * 1000) / 10 : 0;
+
+            Object.values(subjectMap).forEach(subj => {
+                subj.percentage = subj.total > 0 ? Math.round((subj.attended / subj.total) * 1000) / 10 : 0;
+            });
+
+            const eligibility = overallPercentage >= 75 ? 'Eligible' : overallPercentage >= 65 ? 'Warning' : 'Critical Shortage';
+
+            return res.json({
+                student: {
+                    _id: student._id,
+                    name: student.name,
+                    email: student.email,
+                    idNumber: student.idNumber || 'N/A',
+                    course: student.course?.name || 'N/A',
+                    courseCode: student.course?.code || 'N/A',
+                    department: student.department?.name || 'N/A',
+                    year: student.year || 'N/A'
+                },
+                timeframe,
+                dateRange: {
+                    start: start.toISOString(),
+                    end: end.toISOString()
+                },
+                summary: {
+                    totalClasses,
+                    attended: attendedClasses,
+                    absent: absentClasses,
+                    percentage: overallPercentage,
+                    eligibility
+                },
+                subjects: Object.values(subjectMap),
+                sessionLogs
+            });
+        }
+
+        // Case 2: Roster Summary for Admin / Faculty (No single studentId specified)
+        const studentFilter = { role: 'student' };
+        if (req.query.courseId) studentFilter.course = req.query.courseId;
+        if (req.query.departmentId) studentFilter.department = req.query.departmentId;
+
+        const students = await User.find(studentFilter)
+            .select('name email idNumber course department year')
+            .populate('course', 'name code')
+            .populate('department', 'name code')
+            .sort({ name: 1 });
+
+        const sessions = await Attendance.find({ date: { $gte: start, $lte: end } })
+            .populate({ path: 'class', select: 'students name subject' });
+
+        const rosterSummary = students.map(st => {
+            const sid = st._id.toString();
+            let total = 0;
+            let attended = 0;
+
+            sessions.forEach(sess => {
+                const isEnrolled = sess.class?.students?.some(s => (s._id || s).toString() === sid);
+                const rec = sess.records.find(r => (r.student?._id || r.student)?.toString() === sid);
+                if (!isEnrolled && !rec) return;
+
+                total++;
+                if (rec && rec.status === 'Present') {
+                    attended++;
+                }
+            });
+
+            const absent = total - attended;
+            const percentage = total > 0 ? Math.round((attended / total) * 1000) / 10 : 0;
+
+            return {
+                student: {
+                    _id: st._id,
+                    name: st.name,
+                    email: st.email,
+                    idNumber: st.idNumber || 'N/A',
+                    course: st.course?.name || 'N/A',
+                    courseCode: st.course?.code || 'N/A',
+                    department: st.department?.name || 'N/A',
+                    year: st.year || 'N/A'
+                },
+                totalClasses: total,
+                attended,
+                absent,
+                percentage,
+                eligibility: percentage >= 75 ? 'Eligible' : percentage >= 65 ? 'Warning' : 'Critical Shortage'
+            };
+        });
+
+        res.json({
+            timeframe,
+            dateRange: { start: start.toISOString(), end: end.toISOString() },
+            students: rosterSummary
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
 module.exports = {
     startSession,
     markAttendance,
@@ -523,6 +775,7 @@ module.exports = {
     getAttendanceRecords,
     getStudentStats,
     stopSession,
-    getSessionSummary
+    getSessionSummary,
+    getStudentAttendanceReport
 };
 

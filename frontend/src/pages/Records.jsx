@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Download, Users, Calendar, Search, MapPin } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Download, Users, Calendar, Search, MapPin, FileText } from 'lucide-react';
 import attendanceService from '../services/attendance.service';
 
 export default function Records() {
@@ -63,18 +64,26 @@ export default function Records() {
           <h1 className="text-3xl font-bold text-white tracking-tight flex items-center gap-3">
              <Calendar className="w-8 h-8 text-primary" /> Session Archives
           </h1>
-          <p className="text-text-muted text-[15px] mt-1">Review historical attendance data and export reports.</p>
+          <p className="text-text-muted text-[15px] mt-1">Review historical attendance sessions or view detailed student reports.</p>
         </div>
         
-        <div className="relative w-full md:w-80">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-          <input
-            type="text"
-            placeholder="Search classes or subjects..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-11 pr-4 py-3 bg-[#12131a] border border-border/10 rounded-full focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 text-[14px] text-white shadow-inner"
-          />
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <Link
+            to="/dashboard/reports"
+            className="px-4 py-2.5 bg-primary/10 hover:bg-primary/20 border border-primary/20 text-primary rounded-xl font-semibold text-xs flex items-center gap-2 transition-all shadow-sm"
+          >
+            <FileText className="w-4 h-4" /> Student Reports (PDF)
+          </Link>
+          <div className="relative w-full md:w-72">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+            <input
+              type="text"
+              placeholder="Search classes or subjects..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-11 pr-4 py-2.5 bg-[#12131a] border border-border/10 rounded-xl focus:outline-none focus:border-primary/50 text-[13px] text-white shadow-inner"
+            />
+          </div>
         </div>
       </div>
 

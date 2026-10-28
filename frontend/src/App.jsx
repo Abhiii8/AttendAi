@@ -18,6 +18,7 @@ import Timetable from './pages/Timetable';
 
 import Records from './pages/Records';
 import History from './pages/History';
+import StudentReports from './pages/StudentReports';
 
 function App() {
   return (
@@ -42,6 +43,8 @@ function App() {
           <Route path="qr" element={<GenerateQR />} />
           <Route path="scan" element={<ScanQR />} />
           <Route path="records" element={<Records />} />
+          <Route path="reports" element={<StudentReports />} />
+          <Route path="student-reports" element={<StudentReports />} />
           <Route path="history" element={<History />} />
         </Route>
       </Routes>

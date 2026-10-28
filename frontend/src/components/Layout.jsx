@@ -11,7 +11,8 @@ import {
   Menu,
   Search,
   Bell,
-  Command
+  Command,
+  FileText
 } from 'lucide-react';
 import authService from '../services/auth.service';
 
@@ -43,6 +44,7 @@ export default function Layout() {
       case 'admin':
         return [
           { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+          { name: 'Student Reports (PDF)', path: '/dashboard/reports', icon: FileText },
           { name: 'Faculty Members', path: '/dashboard/faculty', icon: Users },
           { name: 'Courses / Branches', path: '/dashboard/courses', icon: BookOpen },
           { name: 'Departments', path: '/dashboard/departments', icon: BookOpen },
@@ -53,6 +55,7 @@ export default function Layout() {
       case 'faculty':
         return [
           { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+          { name: 'Student Reports (PDF)', path: '/dashboard/reports', icon: FileText },
           { name: 'My Classes', path: '/dashboard/my-classes', icon: BookOpen },
           { name: 'Timetable', path: '/dashboard/timetable', icon: Calendar },
           { name: 'My Students', path: '/dashboard/students', icon: Users },
@@ -63,6 +66,7 @@ export default function Layout() {
       case 'student':
         return [
           { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+          { name: 'My Attendance Report (PDF)', path: '/dashboard/reports', icon: FileText },
           { name: 'Timetable', path: '/dashboard/timetable', icon: Calendar },
           { name: 'Scan QR', path: '/dashboard/scan', icon: QrCode },
           { name: 'My History', path: '/dashboard/history', icon: Calendar },
