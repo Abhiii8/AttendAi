@@ -16,8 +16,9 @@ const getStats = async () => {
     return response.json();
 };
 
-const getUsers = async () => {
-    const response = await fetch(API_URL + 'users', {
+const getUsers = async (role) => {
+    const url = role ? `${API_URL}users?role=${role}` : `${API_URL}users`;
+    const response = await fetch(url, {
         headers: getAuthHeaders()
     });
     if (!response.ok) throw new Error('Failed to fetch users');

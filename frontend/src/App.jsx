@@ -4,6 +4,7 @@ import Register from './pages/Register';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
+import FacultyManagement from './pages/FacultyManagement';
 import Departments from './pages/Departments';
 import Courses from './pages/Courses';
 import Subjects from './pages/Subjects';
@@ -30,10 +31,11 @@ function App() {
         <Route path="/dashboard" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="timetable" element={<Timetable />} />
-          <Route path="users" element={<Users />} />
-          <Route path="departments" element={<Departments />} />
+          <Route path="faculty" element={<FacultyManagement />} />
           <Route path="courses" element={<Courses />} />
+          <Route path="departments" element={<Departments />} />
           <Route path="subjects" element={<Subjects />} />
+          <Route path="users" element={<Users />} />
           <Route path="classes" element={<AdminClasses />} />
           <Route path="my-classes" element={<FacultyClasses />} />
           <Route path="students" element={<FacultyStudents />} />

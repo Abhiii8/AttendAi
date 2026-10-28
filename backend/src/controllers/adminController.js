@@ -138,7 +138,11 @@ const getStats = async (req, res) => {
 // @access  Private/Admin
 const getUsers = async (req, res) => {
     try {
-        const users = await User.find()
+        const filter = {};
+        if (req.query.role) {
+            filter.role = req.query.role;
+        }
+        const users = await User.find(filter)
             .select('-password -faceEmbeddings')
             .populate('department', 'name code')
             .populate('course', 'name code')

@@ -43,10 +43,11 @@ export default function Layout() {
       case 'admin':
         return [
           { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-          { name: 'User Management', path: '/dashboard/users', icon: Users },
-          { name: 'Departments', path: '/dashboard/departments', icon: BookOpen },
+          { name: 'Faculty Members', path: '/dashboard/faculty', icon: Users },
           { name: 'Courses / Branches', path: '/dashboard/courses', icon: BookOpen },
+          { name: 'Departments', path: '/dashboard/departments', icon: BookOpen },
           { name: 'Subjects', path: '/dashboard/subjects', icon: BookOpen },
+          { name: 'User Management', path: '/dashboard/users', icon: Users },
           { name: 'All Classes', path: '/dashboard/classes', icon: BookOpen },
         ];
       case 'faculty':
