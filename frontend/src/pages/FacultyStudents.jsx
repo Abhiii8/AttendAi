@@ -113,7 +113,9 @@ export default function FacultyStudents() {
     setFormStatus('Processing AI Biometrics...');
 
     try {
-      const detection = await faceapi.detectSingleFace(imgRef.current).withFaceLandmarks().withFaceDescriptor();
+      const detection = await faceapi.detectSingleFace(imgRef.current, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.2 }))
+        .withFaceLandmarks()
+        .withFaceDescriptor();
       
       if (!detection) {
         throw new Error("No clear face detected in the photo. Please upload a clear, front-facing passport photo.");

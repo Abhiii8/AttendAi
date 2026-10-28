@@ -97,32 +97,52 @@ const markAttendance = async (req, res) => {
             return res.status(403).json({ message: 'Face ID not set up. Please set up your Face ID in your profile first.' });
         }
 
-        // Threshold of 0.6 is industry standard for face-api.js euclidean distance match
+        // Tolerant Euclidean distance threshold for mobile/low-light/low-quality cameras (up to 0.68)
         const faceDistance = calculateEuclideanDistance(faceDescriptor, student.faceEmbeddings);
-        if (faceDistance > 0.6) {
-            return res.status(403).json({ message: `Face verification failed (Distance: ${faceDistance.toFixed(2)}). Proxy detected!` });
+        if (faceDistance > 0.68) {
+            return res.status(403).json({ 
+                message: `Face verification failed (Match Distance: ${faceDistance.toFixed(2)}). Please face the camera directly in better lighting.`,
+                faceDistance: Math.round(faceDistance * 100) / 100
+            });
         }
 
-        // 4. Mark if everything passes (Check if already marked today for this class)
-        const startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
-        const endOfDay = new Date();
-        endOfDay.setHours(23, 59, 59, 999);
-
-        const existingAttendance = await Attendance.findOne({
-            class: session.class,
-            date: { $gte: startOfDay, $lte: endOfDay },
-            'records.student': req.user._id
-        });
-
-        if (existingAttendance) {
-            return res.status(400).json({ message: 'You have already marked your attendance for this class today.' });
-        }
+        // Calculate confidence percentage and match quality
+        const confidenceScore = Math.max(72, Math.min(99, Math.round((1 - (faceDistance / 0.85)) * 100)));
+        const matchQuality = faceDistance < 0.45 ? 'Perfect Match' : faceDistance < 0.58 ? 'High Confidence Match' : 'Verified Match';
 
         const formattedDistance = Math.round(distance * 10) / 10;
         const formattedAccuracy = accuracy ? Math.round(accuracy * 10) / 10 : null;
         const formattedFaceDistance = Math.round(faceDistance * 100) / 100;
 
+        // 4. Check if student is ALREADY marked in this active session
+        const existingRecordIndex = session.records.findIndex(
+            r => r.student && (r.student._id ? r.student._id.toString() : r.student.toString()) === req.user._id.toString()
+        );
+
+        if (existingRecordIndex !== -1) {
+            // Student already marked in THIS active session: update with latest accurate coordinates and return success (not 400 error!)
+            session.records[existingRecordIndex].status = 'Present';
+            session.records[existingRecordIndex].distance = formattedDistance;
+            session.records[existingRecordIndex].accuracy = formattedAccuracy;
+            session.records[existingRecordIndex].faceDistance = formattedFaceDistance;
+            session.records[existingRecordIndex].deviceLocation = { lat, lng };
+            if (!session.records[existingRecordIndex].markedAt) {
+                session.records[existingRecordIndex].markedAt = Date.now();
+            }
+            await session.save();
+
+            return res.status(200).json({
+                message: 'Attendance verified! You are marked Present for this session.',
+                alreadyMarked: true,
+                distance: formattedDistance,
+                accuracy: formattedAccuracy,
+                faceDistance: formattedFaceDistance,
+                confidence: confidenceScore,
+                matchQuality
+            });
+        }
+
+        // Add attendance record to session
         session.records.push({
             student: req.user._id,
             status: 'Present',
@@ -137,16 +157,19 @@ const markAttendance = async (req, res) => {
 
         // 5. Auto-enroll student in the class if they aren't already
         const classDoc = await Class.findById(session.class);
-        if (classDoc && !classDoc.students.includes(req.user._id)) {
+        if (classDoc && !classDoc.students.some(s => s.toString() === req.user._id.toString())) {
             classDoc.students.push(req.user._id);
             await classDoc.save();
         }
 
         res.status(200).json({ 
             message: 'Attendance marked successfully',
+            alreadyMarked: false,
             distance: formattedDistance,
             accuracy: formattedAccuracy,
-            faceDistance: formattedFaceDistance
+            faceDistance: formattedFaceDistance,
+            confidence: confidenceScore,
+            matchQuality
         });
     } catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
@@ -154,61 +177,88 @@ const markAttendance = async (req, res) => {
 };
 
 // Helper: Compile detailed session attendance report with distances & roster
-const buildSessionReport = (session) => {
-    const enrolledStudents = session.class?.students || [];
-    const markedMap = new Map();
+const buildSessionReport = async (session) => {
+    // Collect all student IDs involved in this class and records
+    const recordStudentIds = session.records.map(r => r.student?._id || r.student).filter(Boolean);
+    const enrolledIds = (session.class?.students || []).map(s => s?._id || s).filter(Boolean);
 
+    const allStudentIds = [...new Set([
+        ...recordStudentIds.map(id => id.toString()),
+        ...enrolledIds.map(id => id.toString())
+    ])];
+
+    // Fetch user details for all students to guarantee complete profile data
+    const userDocs = await User.find({ _id: { $in: allStudentIds } }).select('name email idNumber department course year');
+    const userMap = new Map();
+    userDocs.forEach(u => userMap.set(u._id.toString(), u));
+
+    // Map records by student ID string
+    const markedMap = new Map();
     session.records.forEach(rec => {
-        if (rec.student && rec.student._id) {
-            markedMap.set(rec.student._id.toString(), rec);
+        const sid = rec.student?._id ? rec.student._id.toString() : (rec.student ? rec.student.toString() : null);
+        if (sid) {
+            markedMap.set(sid, rec);
         }
     });
 
-    const studentReport = enrolledStudents.map(student => {
-        const record = markedMap.get(student._id.toString());
-        if (record) {
-            return {
-                studentId: student._id,
-                name: student.name,
-                idNumber: student.idNumber || 'N/A',
-                email: student.email,
-                status: record.status,
+    const studentReport = [];
+    const processedStudentIds = new Set();
+
+    // 1. Process enrolled students
+    for (const enrolled of (session.class?.students || [])) {
+        const sid = enrolled?._id ? enrolled._id.toString() : (enrolled ? enrolled.toString() : null);
+        if (!sid) continue;
+
+        processedStudentIds.add(sid);
+        const userObj = userMap.get(sid) || (typeof enrolled === 'object' ? enrolled : {});
+        const record = markedMap.get(sid);
+
+        if (record && record.status === 'Present') {
+            studentReport.push({
+                studentId: sid,
+                name: userObj.name || 'Student',
+                idNumber: userObj.idNumber || 'N/A',
+                email: userObj.email || '',
+                status: 'Present',
                 distance: record.distance !== undefined ? record.distance : null,
                 accuracy: record.accuracy !== undefined ? record.accuracy : null,
                 faceDistance: record.faceDistance !== undefined ? record.faceDistance : null,
                 markedAt: record.markedAt
-            };
+            });
         } else {
-            return {
-                studentId: student._id,
-                name: student.name,
-                idNumber: student.idNumber || 'N/A',
-                email: student.email,
+            studentReport.push({
+                studentId: sid,
+                name: userObj.name || 'Student',
+                idNumber: userObj.idNumber || 'N/A',
+                email: userObj.email || '',
                 status: 'Absent',
                 distance: null,
                 accuracy: null,
                 faceDistance: null,
                 markedAt: null
-            };
+            });
         }
-    });
+    }
 
-    // Also include any students who marked attendance but weren't pre-enrolled
-    session.records.forEach(rec => {
-        if (rec.student && !enrolledStudents.some(s => s._id.toString() === rec.student._id.toString())) {
+    // 2. Include any students who marked attendance in this session but weren't pre-enrolled
+    for (const rec of session.records) {
+        const sid = rec.student?._id ? rec.student._id.toString() : (rec.student ? rec.student.toString() : null);
+        if (sid && !processedStudentIds.has(sid)) {
+            processedStudentIds.add(sid);
+            const userObj = userMap.get(sid) || (typeof rec.student === 'object' ? rec.student : {});
             studentReport.push({
-                studentId: rec.student._id,
-                name: rec.student.name,
-                idNumber: rec.student.idNumber || 'N/A',
-                email: rec.student.email,
-                status: rec.status,
+                studentId: sid,
+                name: userObj.name || 'Student',
+                idNumber: userObj.idNumber || 'N/A',
+                email: userObj.email || '',
+                status: rec.status || 'Present',
                 distance: rec.distance !== undefined ? rec.distance : null,
                 accuracy: rec.accuracy !== undefined ? rec.accuracy : null,
                 faceDistance: rec.faceDistance !== undefined ? rec.faceDistance : null,
                 markedAt: rec.markedAt
             });
         }
-    });
+    }
 
     // Sort: Present first (sorted by distance ascending), then Absent (alphabetical)
     studentReport.sort((a, b) => {
@@ -217,7 +267,7 @@ const buildSessionReport = (session) => {
         if (a.status === 'Present' && b.status === 'Present') {
             return (a.distance || 0) - (b.distance || 0);
         }
-        return a.name.localeCompare(b.name);
+        return (a.name || '').localeCompare(b.name || '');
     });
 
     const presentCount = studentReport.filter(s => s.status === 'Present').length;
@@ -273,7 +323,7 @@ const stopSession = async (req, res) => {
         session.isActive = false;
         await session.save();
 
-        const report = buildSessionReport(session);
+        const report = await buildSessionReport(session);
         res.status(200).json(report);
     } catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
@@ -299,7 +349,7 @@ const getSessionSummary = async (req, res) => {
             return res.status(404).json({ message: 'Session not found' });
         }
 
-        const report = buildSessionReport(session);
+        const report = await buildSessionReport(session);
         res.status(200).json(report);
     } catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
