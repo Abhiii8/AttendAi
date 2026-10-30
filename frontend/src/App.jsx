@@ -19,7 +19,6 @@ import Timetable from './pages/Timetable';
 import Records from './pages/Records';
 import History from './pages/History';
 import StudentReports from './pages/StudentReports';
-import AcademicReports from './pages/AcademicReports';
 
 function App() {
   return (
@@ -46,9 +45,6 @@ function App() {
           <Route path="records" element={<Records />} />
           <Route path="reports" element={<StudentReports />} />
           <Route path="student-reports" element={<StudentReports />} />
-          <Route path="academic-reports" element={<AcademicReports />} />
-          <Route path="course-reports" element={<AcademicReports />} />
-          <Route path="faculty-reports" element={<AcademicReports />} />
           <Route path="history" element={<History />} />
         </Route>
       </Routes>
