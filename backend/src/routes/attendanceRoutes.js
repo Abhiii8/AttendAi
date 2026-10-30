@@ -7,7 +7,9 @@ const {
     getStudentStats,
     stopSession,
     getSessionSummary,
-    getStudentAttendanceReport
+    getStudentAttendanceReport,
+    getCourseAttendanceReport,
+    getFacultyAttendanceReport
 } = require('../controllers/attendanceController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
@@ -15,6 +17,8 @@ const router = express.Router();
 
 router.get('/', protect, getAttendanceRecords);
 router.get('/student-report', protect, getStudentAttendanceReport);
+router.get('/course-report', protect, getCourseAttendanceReport);
+router.get('/faculty-report', protect, getFacultyAttendanceReport);
 router.get('/student-stats', protect, authorize('student'), getStudentStats);
 router.post('/start', protect, authorize('faculty'), startSession);
 router.post('/stop/:id', protect, authorize('faculty', 'admin'), stopSession);

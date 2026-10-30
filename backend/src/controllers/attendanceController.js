@@ -1,6 +1,8 @@
 const Attendance = require('../models/Attendance');
 const Class = require('../models/Class');
 const User = require('../models/User');
+const Course = require('../models/Course');
+const Subject = require('../models/Subject');
 const crypto = require('crypto');
 
 // Utility: Haversine Formula for distance in meters
@@ -768,6 +770,395 @@ const getStudentAttendanceReport = async (req, res) => {
     }
 };
 
+// @desc    Get complete course-wide attendance report & analytics (IMSCIT, BCA, MCA)
+// @route   GET /api/attendance/course-report
+// @access  Private
+const getCourseAttendanceReport = async (req, res) => {
+    try {
+        let courseId = req.query.courseId;
+        if (!courseId) {
+            const firstCourse = await Course.findOne();
+            if (!firstCourse) {
+                return res.status(404).json({ message: 'No courses found in system.' });
+            }
+            courseId = firstCourse._id.toString();
+        }
+
+        const course = await Course.findById(courseId).populate('department', 'name code');
+        if (!course) {
+            return res.status(404).json({ message: 'Course not found.' });
+        }
+
+        const timeframe = req.query.timeframe || 'all';
+        let start, end;
+        if (timeframe === 'daily') {
+            const base = req.query.date ? new Date(req.query.date) : new Date();
+            start = new Date(base); start.setHours(0, 0, 0, 0);
+            end = new Date(base); end.setHours(23, 59, 59, 999);
+        } else if (timeframe === 'weekly') {
+            end = req.query.endDate ? new Date(req.query.endDate) : new Date();
+            end.setHours(23, 59, 59, 999);
+            start = new Date(end); start.setDate(end.getDate() - 7); start.setHours(0, 0, 0, 0);
+        } else if (timeframe === 'monthly') {
+            end = req.query.endDate ? new Date(req.query.endDate) : new Date();
+            end.setHours(23, 59, 59, 999);
+            start = new Date(end); start.setDate(end.getDate() - 30); start.setHours(0, 0, 0, 0);
+        } else if (timeframe === 'custom') {
+            start = req.query.startDate ? new Date(req.query.startDate) : new Date(0);
+            start.setHours(0, 0, 0, 0);
+            end = req.query.endDate ? new Date(req.query.endDate) : new Date();
+            end.setHours(23, 59, 59, 999);
+        } else {
+            start = new Date(0);
+            end = new Date();
+            end.setHours(23, 59, 59, 999);
+        }
+
+        // 1. Fetch all students in this course
+        const students = await User.find({ role: 'student', course: course._id })
+            .select('name email idNumber year')
+            .sort({ idNumber: 1 });
+
+        // 2. Fetch all classes in this course
+        const classes = await Class.find({ course: course._id })
+            .populate('subject', 'name code credits')
+            .populate('faculty', 'name email idNumber');
+        const classIds = classes.map(c => c._id);
+
+        // 3. Fetch attendance sessions in this timeframe
+        const sessions = await Attendance.find({
+            class: { $in: classIds },
+            date: { $gte: start, $lte: end }
+        })
+            .populate({ path: 'class', populate: { path: 'subject' } })
+            .populate('faculty', 'name email idNumber')
+            .sort({ date: -1 });
+
+        // 4. Calculate Subject Breakdown
+        const subjectStatsMap = {};
+        classes.forEach(cls => {
+            if (cls.subject) {
+                const sId = cls.subject._id.toString();
+                if (!subjectStatsMap[sId]) {
+                    subjectStatsMap[sId] = {
+                        subjectId: sId,
+                        name: cls.subject.name,
+                        code: cls.subject.code,
+                        facultyName: cls.faculty?.name || 'Faculty Instructor',
+                        totalLectures: 0,
+                        totalPresent: 0,
+                        totalExpected: 0
+                    };
+                }
+            }
+        });
+
+        // 5. Calculate Student Roster stats
+        const studentStatsMap = {};
+        students.forEach(st => {
+            studentStatsMap[st._id.toString()] = {
+                student: {
+                    _id: st._id,
+                    name: st.name,
+                    email: st.email,
+                    idNumber: st.idNumber,
+                    year: st.year || 'FY'
+                },
+                totalClasses: 0,
+                attended: 0,
+                absent: 0
+            };
+        });
+
+        const recentSessionsList = [];
+
+        sessions.forEach(sess => {
+            const subj = sess.class?.subject;
+            const sId = subj?._id?.toString();
+            if (sId && subjectStatsMap[sId]) {
+                subjectStatsMap[sId].totalLectures++;
+            }
+
+            let sessPresent = 0;
+            let sessTotal = 0;
+
+            students.forEach(st => {
+                const sidStr = st._id.toString();
+                const isEnrolled = sess.class?.students 
+                    ? sess.class.students.some(s => (s._id || s).toString() === sidStr)
+                    : true;
+                const rec = sess.records.find(r => (r.student?._id || r.student)?.toString() === sidStr);
+
+                if (isEnrolled || rec) {
+                    sessTotal++;
+                    studentStatsMap[sidStr].totalClasses++;
+                    if (rec && rec.status === 'Present') {
+                        sessPresent++;
+                        studentStatsMap[sidStr].attended++;
+                        if (sId && subjectStatsMap[sId]) subjectStatsMap[sId].totalPresent++;
+                    } else {
+                        studentStatsMap[sidStr].absent++;
+                    }
+                    if (sId && subjectStatsMap[sId]) subjectStatsMap[sId].totalExpected++;
+                }
+            });
+
+            recentSessionsList.push({
+                sessionId: sess._id,
+                date: sess.date,
+                className: sess.class?.name || 'Class',
+                subjectName: subj?.name || 'Subject',
+                subjectCode: subj?.code || '',
+                facultyName: sess.faculty?.name || 'Faculty',
+                presentCount: sessPresent,
+                totalStudents: sessTotal,
+                attendanceRate: sessTotal > 0 ? Math.round((sessPresent / sessTotal) * 100) : 0,
+                radius: sess.radius
+            });
+        });
+
+        const subjectList = Object.values(subjectStatsMap).map(s => {
+            const avgRate = s.totalExpected > 0 ? Math.round((s.totalPresent / s.totalExpected) * 1000) / 10 : 0;
+            return {
+                subjectId: s.subjectId,
+                name: s.name,
+                code: s.code,
+                facultyName: s.facultyName,
+                totalLectures: s.totalLectures,
+                attendanceRate: avgRate
+            };
+        });
+
+        let totalPresentAll = 0;
+        let totalExpectedAll = 0;
+        let eligibleCount = 0;
+        let warningCount = 0;
+        let shortageCount = 0;
+
+        const studentRoster = Object.values(studentStatsMap).map(st => {
+            const pct = st.totalClasses > 0 ? Math.round((st.attended / st.totalClasses) * 1000) / 10 : 0;
+            totalPresentAll += st.attended;
+            totalExpectedAll += st.totalClasses;
+
+            let eligibility = 'Eligible';
+            if (pct >= 75) {
+                eligibleCount++;
+                eligibility = 'Eligible';
+            } else if (pct >= 65) {
+                warningCount++;
+                eligibility = 'Warning';
+            } else {
+                shortageCount++;
+                eligibility = 'Critical Shortage';
+            }
+
+            return {
+                ...st,
+                percentage: pct,
+                eligibility
+            };
+        });
+
+        const overallCoursePercentage = totalExpectedAll > 0 
+            ? Math.round((totalPresentAll / totalExpectedAll) * 1000) / 10 
+            : 0;
+
+        res.json({
+            course: {
+                _id: course._id,
+                name: course.name,
+                code: course.code,
+                department: course.department?.name || 'FCAIT',
+                durationYears: course.durationYears || 3,
+                totalSemesters: course.totalSemesters || 6
+            },
+            timeframe,
+            dateRange: { start: start.toISOString(), end: end.toISOString() },
+            summary: {
+                totalStudents: students.length,
+                totalLectures: sessions.length,
+                overallPercentage: overallCoursePercentage,
+                eligibleCount,
+                warningCount,
+                shortageCount
+            },
+            subjects: subjectList,
+            students: studentRoster,
+            recentSessions: recentSessionsList.slice(0, 15)
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+// @desc    Get complete faculty teaching performance & attendance report
+// @route   GET /api/attendance/faculty-report
+// @access  Private
+const getFacultyAttendanceReport = async (req, res) => {
+    try {
+        let facultyId = req.query.facultyId;
+        if (!facultyId) {
+            if (req.user.role === 'faculty') {
+                facultyId = req.user._id.toString();
+            } else {
+                const firstFaculty = await User.findOne({ role: 'faculty' });
+                if (!firstFaculty) {
+                    return res.status(404).json({ message: 'No faculty members found.' });
+                }
+                facultyId = firstFaculty._id.toString();
+            }
+        }
+
+        const faculty = await User.findById(facultyId)
+            .select('-password -faceEmbeddings')
+            .populate('department', 'name code')
+            .populate('course', 'name code')
+            .populate('assignedSubjects', 'name code credits');
+
+        if (!faculty) {
+            return res.status(404).json({ message: 'Faculty member not found.' });
+        }
+
+        const timeframe = req.query.timeframe || 'all';
+        let start, end;
+        if (timeframe === 'daily') {
+            const base = req.query.date ? new Date(req.query.date) : new Date();
+            start = new Date(base); start.setHours(0, 0, 0, 0);
+            end = new Date(base); end.setHours(23, 59, 59, 999);
+        } else if (timeframe === 'weekly') {
+            end = req.query.endDate ? new Date(req.query.endDate) : new Date();
+            end.setHours(23, 59, 59, 999);
+            start = new Date(end); start.setDate(end.getDate() - 7); start.setHours(0, 0, 0, 0);
+        } else if (timeframe === 'monthly') {
+            end = req.query.endDate ? new Date(req.query.endDate) : new Date();
+            end.setHours(23, 59, 59, 999);
+            start = new Date(end); start.setDate(end.getDate() - 30); start.setHours(0, 0, 0, 0);
+        } else if (timeframe === 'custom') {
+            start = req.query.startDate ? new Date(req.query.startDate) : new Date(0);
+            start.setHours(0, 0, 0, 0);
+            end = req.query.endDate ? new Date(req.query.endDate) : new Date();
+            end.setHours(23, 59, 59, 999);
+        } else {
+            start = new Date(0);
+            end = new Date();
+            end.setHours(23, 59, 59, 999);
+        }
+
+        const sessions = await Attendance.find({
+            faculty: faculty._id,
+            date: { $gte: start, $lte: end }
+        })
+            .populate({ path: 'class', populate: [{ path: 'subject' }, { path: 'course' }] })
+            .sort({ date: -1 });
+
+        const subjectStatsMap = {};
+        (faculty.assignedSubjects || []).forEach(subj => {
+            const sId = subj._id.toString();
+            subjectStatsMap[sId] = {
+                subjectId: sId,
+                name: subj.name,
+                code: subj.code,
+                credits: subj.credits,
+                totalLectures: 0,
+                totalPresent: 0,
+                totalExpected: 0
+            };
+        });
+
+        let totalPresentAll = 0;
+        let totalExpectedAll = 0;
+        const sessionLogs = [];
+
+        sessions.forEach(sess => {
+            const subj = sess.class?.subject;
+            const sId = subj?._id?.toString();
+
+            const presentCount = sess.records.filter(r => r.status === 'Present').length;
+            const totalCount = sess.records.length;
+
+            totalPresentAll += presentCount;
+            totalExpectedAll += totalCount;
+
+            if (sId && subjectStatsMap[sId]) {
+                subjectStatsMap[sId].totalLectures++;
+                subjectStatsMap[sId].totalPresent += presentCount;
+                subjectStatsMap[sId].totalExpected += totalCount;
+            } else if (subj) {
+                if (!subjectStatsMap[sId]) {
+                    subjectStatsMap[sId] = {
+                        subjectId: sId,
+                        name: subj.name,
+                        code: subj.code,
+                        credits: subj.credits || 3,
+                        totalLectures: 0,
+                        totalPresent: 0,
+                        totalExpected: 0
+                    };
+                }
+                subjectStatsMap[sId].totalLectures++;
+                subjectStatsMap[sId].totalPresent += presentCount;
+                subjectStatsMap[sId].totalExpected += totalCount;
+            }
+
+            const attendanceRate = totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0;
+
+            sessionLogs.push({
+                sessionId: sess._id,
+                date: sess.date,
+                className: sess.class?.name || 'Class',
+                subjectName: subj?.name || 'Subject',
+                subjectCode: subj?.code || '',
+                courseName: sess.class?.course?.name || 'Course',
+                courseCode: sess.class?.course?.code || '',
+                presentCount,
+                totalCount,
+                attendanceRate,
+                passcode: sess.attendanceCode,
+                radius: sess.radius
+            });
+        });
+
+        const subjectList = Object.values(subjectStatsMap).map(s => {
+            const avgRate = s.totalExpected > 0 ? Math.round((s.totalPresent / s.totalExpected) * 1000) / 10 : 0;
+            return {
+                subjectId: s.subjectId,
+                name: s.name,
+                code: s.code,
+                credits: s.credits,
+                totalLectures: s.totalLectures,
+                attendanceRate: avgRate
+            };
+        });
+
+        const overallFacultyAvgRate = totalExpectedAll > 0 
+            ? Math.round((totalPresentAll / totalExpectedAll) * 1000) / 10 
+            : 0;
+
+        res.json({
+            faculty: {
+                _id: faculty._id,
+                name: faculty.name,
+                email: faculty.email,
+                idNumber: faculty.idNumber || '001',
+                department: faculty.department?.name || 'FCAIT',
+                assignedSubjects: faculty.assignedSubjects || []
+            },
+            timeframe,
+            dateRange: { start: start.toISOString(), end: end.toISOString() },
+            summary: {
+                totalLectures: sessions.length,
+                totalSubjects: faculty.assignedSubjects?.length || subjectList.length,
+                totalVerifiedCheckIns: totalPresentAll,
+                averageAttendanceRate: overallFacultyAvgRate
+            },
+            subjects: subjectList,
+            sessions: sessionLogs
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
 module.exports = {
     startSession,
     markAttendance,
@@ -776,6 +1167,8 @@ module.exports = {
     getStudentStats,
     stopSession,
     getSessionSummary,
-    getStudentAttendanceReport
+    getStudentAttendanceReport,
+    getCourseAttendanceReport,
+    getFacultyAttendanceReport
 };
 

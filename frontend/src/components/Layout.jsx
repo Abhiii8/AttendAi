@@ -12,7 +12,8 @@ import {
   Search,
   Bell,
   Command,
-  FileText
+  FileText,
+  GraduationCap
 } from 'lucide-react';
 import authService from '../services/auth.service';
 
@@ -44,6 +45,7 @@ export default function Layout() {
       case 'admin':
         return [
           { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+          { name: 'Course & Faculty Reports', path: '/dashboard/academic-reports', icon: GraduationCap },
           { name: 'Student Reports (PDF)', path: '/dashboard/reports', icon: FileText },
           { name: 'Faculty Members', path: '/dashboard/faculty', icon: Users },
           { name: 'Courses / Branches', path: '/dashboard/courses', icon: BookOpen },
@@ -55,6 +57,7 @@ export default function Layout() {
       case 'faculty':
         return [
           { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+          { name: 'Course & Teaching Reports', path: '/dashboard/academic-reports', icon: GraduationCap },
           { name: 'Student Reports (PDF)', path: '/dashboard/reports', icon: FileText },
           { name: 'My Classes', path: '/dashboard/my-classes', icon: BookOpen },
           { name: 'Timetable', path: '/dashboard/timetable', icon: Calendar },

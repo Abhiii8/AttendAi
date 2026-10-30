@@ -31,3 +31,5 @@ Thumbs.db
 
 .vercel
 .env*
+
+extracted_doc_images/
