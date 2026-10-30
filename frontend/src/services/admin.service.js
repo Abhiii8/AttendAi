@@ -16,12 +16,31 @@ const getStats = async () => {
     return response.json();
 };
 
-const getUsers = async (role) => {
-    const url = role ? `${API_URL}users?role=${role}` : `${API_URL}users`;
+const getUsers = async (roleOrFilter) => {
+    let roleStr = '';
+    if (typeof roleOrFilter === 'string') {
+        roleStr = roleOrFilter;
+    } else if (roleOrFilter && typeof roleOrFilter === 'object' && roleOrFilter.role) {
+        roleStr = roleOrFilter.role;
+    }
+    const url = roleStr ? `${API_URL}users?role=${encodeURIComponent(roleStr)}` : `${API_URL}users`;
     const response = await fetch(url, {
         headers: getAuthHeaders()
     });
     if (!response.ok) throw new Error('Failed to fetch users');
+    return response.json();
+};
+
+const getFacultyList = async () => {
+    const response = await fetch(API_URL + 'faculty-list', {
+        headers: getAuthHeaders()
+    });
+    if (!response.ok) {
+        // Fallback to /api/faculty-list
+        const fallback = await fetch('/api/faculty-list', { headers: getAuthHeaders() });
+        if (!fallback.ok) throw new Error('Failed to fetch faculty list');
+        return fallback.json();
+    }
     return response.json();
 };
 
@@ -128,6 +147,7 @@ const adminService = {
     getDepartments,
     getDepartmentHierarchy,
     getCourses,
+    getFacultyList,
     createCourse,
     updateCourse,
     deleteCourse

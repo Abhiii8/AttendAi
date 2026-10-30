@@ -23,6 +23,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import attendanceService from '../services/attendance.service';
 import adminService from '../services/admin.service';
+import facultyService from '../services/faculty.service';
 
 export default function AcademicReports() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -46,9 +47,10 @@ export default function AcademicReports() {
   const [selectedFacultyId, setSelectedFacultyId] = useState('');
   const [facultyReport, setFacultyReport] = useState(null);
 
-  // Search & Loading states
+  // Search, Loading & Error states
   const [studentSearch, setStudentSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
@@ -62,25 +64,67 @@ export default function AcademicReports() {
   const loadInitialData = async () => {
     try {
       setLoading(true);
-      const [coursesData, usersData] = await Promise.all([
-        adminService.getCourses(),
-        adminService.getUsers({ role: 'faculty' })
-      ]);
+      setLoadError(null);
 
-      const validCourses = coursesData || [];
-      const validFaculties = usersData || [];
+      // Resilient fetch for courses with multiple fallback sources
+      let coursesData = [];
+      try {
+        coursesData = await attendanceService.getCourses();
+      } catch {
+        try {
+          coursesData = await adminService.getCourses();
+        } catch (errCourse) {
+          console.warn('Courses fetch error:', errCourse);
+        }
+      }
+
+      // Resilient fetch for faculties with multiple fallback sources
+      let facultiesData = [];
+      try {
+        facultiesData = await attendanceService.getFacultyList();
+      } catch {
+        try {
+          facultiesData = await facultyService.getFacultyList();
+        } catch {
+          try {
+            facultiesData = await adminService.getFacultyList();
+          } catch (errFac) {
+            console.warn('Faculty fetch error:', errFac);
+          }
+        }
+      }
+
+      const validCourses = Array.isArray(coursesData) ? coursesData : [];
+      const validFaculties = Array.isArray(facultiesData) ? facultiesData : [];
 
       setCourses(validCourses);
       setFaculties(validFaculties);
 
+      let targetCourseId = '';
       if (validCourses.length > 0) {
-        setSelectedCourseId(validCourses[0]._id);
+        targetCourseId = validCourses[0]._id;
+        setSelectedCourseId(targetCourseId);
       }
+
+      let targetFacultyId = '';
       if (validFaculties.length > 0) {
-        setSelectedFacultyId(validFaculties[0]._id);
+        const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+        const matched = storedUser?.role === 'faculty'
+          ? validFaculties.find(f => f._id === storedUser._id || f.email === storedUser.email)
+          : null;
+        targetFacultyId = matched ? matched._id : validFaculties[0]._id;
+        setSelectedFacultyId(targetFacultyId);
+      }
+
+      // Proactively load the current tab's report
+      if (activeTab === 'course' && targetCourseId) {
+        await loadCourseReport(targetCourseId);
+      } else if (activeTab === 'faculty' && targetFacultyId) {
+        await loadFacultyReport(targetFacultyId);
       }
     } catch (err) {
       console.error('Failed to load initial report lists:', err);
+      setLoadError('Failed to load institutional courses and faculties. Please check network connection.');
     } finally {
       setLoading(false);
     }
@@ -616,9 +660,13 @@ export default function AcademicReports() {
                   onChange={(e) => setSelectedCourseId(e.target.value)}
                   className="px-3.5 py-2 bg-[#09090b] border border-white/10 rounded-xl text-xs text-white font-medium focus:outline-none focus:border-primary"
                 >
-                  {courses.map(c => (
-                    <option key={c._id} value={c._id}>{c.name} ({c.code})</option>
-                  ))}
+                  {courses.length === 0 ? (
+                    <option value="">No courses available</option>
+                  ) : (
+                    courses.map(c => (
+                      <option key={c._id} value={c._id}>{c.name} ({c.code})</option>
+                    ))
+                  )}
                 </select>
               </div>
             ) : (
@@ -629,9 +677,13 @@ export default function AcademicReports() {
                   onChange={(e) => setSelectedFacultyId(e.target.value)}
                   className="px-3.5 py-2 bg-[#09090b] border border-white/10 rounded-xl text-xs text-white font-medium focus:outline-none focus:border-primary"
                 >
-                  {faculties.map(f => (
-                    <option key={f._id} value={f._id}>{f.name} (Emp ID: {f.idNumber || '001'})</option>
-                  ))}
+                  {faculties.length === 0 ? (
+                    <option value="">No faculty members available</option>
+                  ) : (
+                    faculties.map(f => (
+                      <option key={f._id} value={f._id}>{f.name} (Emp ID: {f.idNumber || '001'})</option>
+                    ))
+                  )}
                 </select>
               </div>
             )}
@@ -1028,7 +1080,27 @@ export default function AcademicReports() {
             </div>
           </div>
         </div>
-      ) : null}
+      ) : (
+        <div className="bg-[#18181b] border border-white/5 rounded-3xl p-12 text-center max-w-lg mx-auto shadow-2xl space-y-4 my-8">
+          <div className="w-16 h-16 rounded-2xl bg-white/5 mx-auto flex items-center justify-center text-white/40">
+            {activeTab === 'course' ? <GraduationCap className="w-8 h-8 text-primary" /> : <Users className="w-8 h-8 text-primary" />}
+          </div>
+          <h3 className="text-lg font-bold text-white">
+            {activeTab === 'course' ? 'No Course Report Loaded' : 'No Faculty Report Loaded'}
+          </h3>
+          <p className="text-xs text-white/50 leading-relaxed">
+            {activeTab === 'course'
+              ? 'Select a degree program from the course dropdown above to inspect attendance analytics, defauters, and audit statistics.'
+              : 'Choose a faculty member from the dropdown above to audit their lecture verification logs and teaching metrics.'}
+          </p>
+          <button
+            onClick={loadInitialData}
+            className="px-5 py-2.5 bg-primary/20 hover:bg-primary/30 border border-primary/30 text-primary text-xs font-semibold rounded-xl transition-all"
+          >
+            Reload Institutional Data
+          </button>
+        </div>
+      )}
     </div>
   );
 }

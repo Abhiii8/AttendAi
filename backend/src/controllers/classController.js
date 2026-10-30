@@ -142,7 +142,11 @@ const User = require('../models/User');
 // @access  Private
 const getFacultyList = async (req, res) => {
     try {
-        const faculty = await User.find({ role: 'faculty' }).select('name email');
+        const faculty = await User.find({ role: 'faculty' })
+            .select('name email idNumber department course assignedSubjects')
+            .populate('department', 'name code')
+            .populate('course', 'name code')
+            .sort({ name: 1 });
         res.status(200).json(faculty);
     } catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });

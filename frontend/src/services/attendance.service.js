@@ -115,6 +115,32 @@ const getFacultyReport = async (params = {}) => {
     return data;
 };
 
+const getCourses = async () => {
+    const response = await fetch(API_URL + 'courses', {
+        headers: getAuthHeaders()
+    });
+    if (!response.ok) {
+        // Fallback to /api/admin/courses
+        const fallback = await fetch('/api/admin/courses', { headers: getAuthHeaders() });
+        if (!fallback.ok) throw new Error('Failed to fetch courses');
+        return fallback.json();
+    }
+    return response.json();
+};
+
+const getFacultyList = async () => {
+    const response = await fetch(API_URL + 'faculty-list', {
+        headers: getAuthHeaders()
+    });
+    if (!response.ok) {
+        // Fallback to /api/faculty-list
+        const fallback = await fetch('/api/faculty-list', { headers: getAuthHeaders() });
+        if (!fallback.ok) throw new Error('Failed to fetch faculty list');
+        return fallback.json();
+    }
+    return response.json();
+};
+
 const attendanceService = {
     startSession,
     markAttendance,
@@ -125,7 +151,9 @@ const attendanceService = {
     getSessionSummary,
     getStudentReport,
     getCourseReport,
-    getFacultyReport
+    getFacultyReport,
+    getCourses,
+    getFacultyList
 };
 
 export default attendanceService;
